@@ -81,10 +81,12 @@ export function GameCanvas({ mobile }: { mobile?: boolean }) {
       }
     };
 
-    window.addEventListener('touchstart', ts, { passive: false });
-    window.addEventListener('touchmove', tm, { passive: false });
-    window.addEventListener('touchend', te);
-    window.addEventListener('touchcancel', te);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('touchstart', ts, { passive: false });
+    canvas.addEventListener('touchmove', tm, { passive: false });
+    canvas.addEventListener('touchend', te);
+    canvas.addEventListener('touchcancel', te);
 
     const interval = setInterval(() => {
       const ship = playerShipRef.current;
@@ -97,10 +99,10 @@ export function GameCanvas({ mobile }: { mobile?: boolean }) {
     }, 200);
 
     return () => {
-      window.removeEventListener('touchstart', ts);
-      window.removeEventListener('touchmove', tm);
-      window.removeEventListener('touchend', te);
-      window.removeEventListener('touchcancel', te);
+      canvas.removeEventListener('touchstart', ts);
+      canvas.removeEventListener('touchmove', tm);
+      canvas.removeEventListener('touchend', te);
+      canvas.removeEventListener('touchcancel', te);
       clearInterval(interval);
     };
   }, [mobile]);
