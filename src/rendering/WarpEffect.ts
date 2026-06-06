@@ -11,7 +11,7 @@ export class WarpEffect {
   private active = true;
   private ringTimer = 0;
 
-  constructor(scene: THREE.Scene, camera: THREE.Camera, duration: number, onComplete: () => void) {
+  constructor(scene: THREE.Scene, camera: THREE.Camera, _duration: number, onComplete: () => void) {
     this.scene = scene; this.onComplete = onComplete; this.camera = camera;
     this.container = new THREE.Group();
     this.scene.add(this.container);
@@ -87,7 +87,7 @@ export class WarpEffect {
     while(this.rings.length>0&&this.rings[0].position.z<-80){
       const o=this.rings.shift()!; this.container.remove(o);
       (o.material as THREE.PointsMaterial).map?.dispose();
-      o.material.dispose(); o.geometry.dispose();
+      (o.material as THREE.PointsMaterial).dispose(); o.geometry.dispose();
     }
     // End when all rings gone or 6s max
     if(this.rings.length===0 && this.age>4.0 || this.age>=6.0){this.active=false;this.dispose();this.onComplete();}
@@ -97,7 +97,7 @@ export class WarpEffect {
     this.scene.remove(this.container);
     for(const r of this.rings){
       (r.material as THREE.PointsMaterial).map?.dispose();
-      r.material.dispose(); r.geometry.dispose();
+      (r.material as THREE.PointsMaterial).dispose(); r.geometry.dispose();
     }
   }
 }

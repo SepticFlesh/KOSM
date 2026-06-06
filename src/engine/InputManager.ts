@@ -15,8 +15,6 @@ export class InputManager {
   private keysJustReleased: Set<string> = new Set();
 
   // Мышь
-  private mouseX = 0;
-  private mouseY = 0;
   private mouseDeltaX = 0;
   private mouseDeltaY = 0;
   private mouseButtons: Map<number, boolean> = new Map();
@@ -51,9 +49,9 @@ export class InputManager {
     document.addEventListener('keydown', this.boundOnKeyDown);
     document.addEventListener('keyup', this.boundOnKeyUp);
     const moveTarget = target ?? document;
-    moveTarget.addEventListener('mousemove', this.boundOnMouseMove);
-    document.addEventListener('mousedown', this.boundOnMouseDown);
-    document.addEventListener('mouseup', this.boundOnMouseUp);
+    moveTarget.addEventListener('mousemove', this.boundOnMouseMove as EventListener);
+    document.addEventListener('mousedown', this.boundOnMouseDown as EventListener);
+    document.addEventListener('mouseup', this.boundOnMouseUp as EventListener);
     document.addEventListener('wheel', this.boundOnWheel);
     document.addEventListener('pointerlockchange', this.boundOnPointerLockChange);
   }
@@ -65,9 +63,9 @@ export class InputManager {
     document.removeEventListener('keydown', this.boundOnKeyDown);
     document.removeEventListener('keyup', this.boundOnKeyUp);
     const moveTarget = target ?? document;
-    moveTarget.removeEventListener('mousemove', this.boundOnMouseMove);
-    document.removeEventListener('mousedown', this.boundOnMouseDown);
-    document.removeEventListener('mouseup', this.boundOnMouseUp);
+    moveTarget.removeEventListener('mousemove', this.boundOnMouseMove as EventListener);
+    document.removeEventListener('mousedown', this.boundOnMouseDown as EventListener);
+    document.removeEventListener('mouseup', this.boundOnMouseUp as EventListener);
     document.removeEventListener('wheel', this.boundOnWheel);
     document.removeEventListener('pointerlockchange', this.boundOnPointerLockChange);
 
@@ -156,6 +154,19 @@ export class InputManager {
     return this.isPointerLocked;
   }
 
+  /** For touch: inject fake mouse delta */
+  injectMouseDelta(dx: number, dy: number): void {
+    this.mouseDeltaX += dx;
+    this.mouseDeltaY += dy;
+  }
+  injectKeyDown(code: string): void {
+    this.keys.set(code, true);
+    this.keysJustPressed.add(code);
+  }
+  injectKeyUp(code: string): void {
+    this.keys.set(code, false);
+  }
+
   // --- Private handlers ---
 
   private onKeyDown(e: KeyboardEvent): void {
@@ -181,8 +192,6 @@ export class InputManager {
   private onMouseMove(e: MouseEvent): void {
     this.mouseDeltaX += e.movementX;
     this.mouseDeltaY += e.movementY;
-    this.mouseX = e.clientX;
-    this.mouseY = e.clientY;
     // Во время pointer lock mousedown/mouseup могут не срабатывать,
     // поэтому отслеживаем кнопки через e.buttons
     this.mouseButtons.set(0, (e.buttons & 1) !== 0);

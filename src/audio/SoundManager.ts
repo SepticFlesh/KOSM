@@ -9,8 +9,6 @@ export class SoundManager {
   // Music
   private musicOscs: OscillatorNode[] = [];
   private musicGain: GainNode | null = null;
-  private musicLfo1: OscillatorNode | null = null;
-  private musicLfo2: OscillatorNode | null = null;
   private musicActive = false;
 
   // Engine sound
@@ -308,8 +306,6 @@ export class SoundManager {
   stopMusic() {
     this.musicOscs.forEach(o => o.stop());
     this.musicOscs = [];
-    this.musicLfo1?.stop(); this.musicLfo2?.stop();
-    this.musicLfo1 = null; this.musicLfo2 = null;
     this.musicGain = null;
     this.musicActive = false;
   }

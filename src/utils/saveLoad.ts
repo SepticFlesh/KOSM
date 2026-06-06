@@ -25,6 +25,3 @@ export function loadGame(): SaveData | null {
   }
 }
 
-export function clearSave(): void {
-  localStorage.removeItem(SAVE_KEY);
-}

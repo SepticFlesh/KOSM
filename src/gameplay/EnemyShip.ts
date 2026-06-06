@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FlightModel, FlightMode, DEFAULT_SHIP_CONFIG } from './FlightModel';
+import { FlightModel, FlightMode } from './FlightModel';
 
 /**
  * Вражеский корабль — пират.
@@ -211,6 +211,7 @@ export class EnemyShip {
     }
 
     if (this.health < 30 && this.aiState === 'attack') {
+      this.aiState = 'evade';
       this.flightModel.setThrottle(1.0);
       const evade = toPlayer.clone().multiplyScalar(-1);
       evade.x += (Math.random() - 0.5) * 2; evade.y += (Math.random() - 0.5) * 2;
@@ -241,7 +242,7 @@ export class EnemyShip {
       b.life -= dt;
       if (b.life <= 0) {
         this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
-        b.head.material.dispose(); b.trail.material.dispose();
+        (b.head.material as THREE.Material).dispose(); (b.trail.material as THREE.Material).dispose();
         b.head.geometry.dispose(); b.trail.geometry.dispose();
         this.enemyBolts.splice(i, 1);
         continue;

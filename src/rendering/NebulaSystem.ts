@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mulberry32 } from '../utils/rng';
 
 /**
  * Beautiful volumetric-looking nebulas using overlapping sprites.
@@ -129,12 +130,3 @@ function genTex(rng: () => number, pal: Array<{r:number;g:number;b:number}>, siz
   return tex;
 }
 
-function mulberry32(seed: number): () => number {
-  let s = seed;
-  return () => {
-    s |= 0; s = s + 0x6D2B79F5 | 0;
-    let t = Math.imul(s ^ s >>> 15, 1 | s);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) | 0;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}

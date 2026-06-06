@@ -16,6 +16,11 @@ export interface TradeItem {
   id: string; name: string; price: number; playerQty: number; stationQty: number;
 }
 
+export interface MapData {
+  objects: Array<{ x: number; z: number; r: number; color: string; label?: string; isPlayer?: boolean; angle?: number }>;
+  range: number;
+}
+
 interface State {
   player: PlayerHUDState;
   hudVisible: boolean;
@@ -30,6 +35,14 @@ interface State {
   missionsTab: 'trade' | 'missions';
   upgrades: Record<string, number>; // upgrade id → level
   stationTab: 'trade' | 'missions' | 'upgrades';
+  reputation: Record<string, number>;
+  factionLog: string[];
+  storyStep: number;
+  lastDamageTime: number;
+  lastHitTime: number;
+  jumpFlashTime: number;
+  showMap: boolean;
+  mapData: MapData | null;
 }
 
 type Listener = () => void;
@@ -63,7 +76,11 @@ const store = createSimpleStore<State>({
   reputation: { federation: 0, miners: 0, traders: 0, pirates: -20 },
   factionLog: [],
   storyStep: 1,
-  lastDamageTime: 0, // 1-4=active story mission
+  lastDamageTime: 0,
+  lastHitTime: 0,
+  jumpFlashTime: 0,
+  showMap: false,
+  mapData: null,
 });
 
 // React hook
@@ -164,10 +181,14 @@ export const gameState = {
   getReputation(factionId: string): number { return store.getState().reputation[factionId] || 0; },
   get lastDamageTime() { return store.getState().lastDamageTime || 0; },
   set lastDamageTime(v: number) { store.setState({ lastDamageTime: v }); },
-  mapData: null as any,
+  get lastHitTime() { return store.getState().lastHitTime || 0; },
+  set lastHitTime(v: number) { store.setState({ lastHitTime: v }); },
+  get jumpFlashTime() { return store.getState().jumpFlashTime || 0; },
+  set jumpFlashTime(v: number) { store.setState({ jumpFlashTime: v }); },
+  mapData: null as MapData | null,
   showMap: false,
   toggleMap() { const s = store.getState(); store.setState({ showMap: !s.showMap }); },
-  setMapData(d: any) { store.setState({ mapData: d }); },
+  setMapData(d: MapData | null) { store.setState({ mapData: d }); },
   getStoryStep(): number { return store.getState().storyStep || 0; },
   advanceStory() {
     store.updateState(s => ({ ...s, storyStep: Math.min(4, (s.storyStep || 0) + 1) }));

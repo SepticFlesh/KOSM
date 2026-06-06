@@ -17,14 +17,7 @@
   opacity: 0.6;
 }
 
-/* ─── Speed indicator (center-bottom) ─── */
-.speed-indicator {
-  position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-}
+/* ─── Speed + mode (now inline in center stack) ─── */
 .speed-value {
   font-size: 36px;
   font-weight: bold;
@@ -37,13 +30,7 @@
   letter-spacing: 3px;
   text-transform: uppercase;
 }
-
-/* ─── Flight mode badge ─── */
 .flight-mode {
-  position: absolute;
-  bottom: 120px;
-  left: 50%;
-  transform: translateX(-50%);
   font-size: 12px;
   font-weight: bold;
   letter-spacing: 2px;
@@ -119,15 +106,7 @@
   letter-spacing: 1px;
 }
 
-/* ─── Ship status (bottom-right) ─── */
-.ship-status {
-  position: absolute;
-  bottom: 30px;
-  right: 30px;
-  font-size: 11px;
-  text-align: right;
-  min-width: 200px;
-}
+/* ─── Ship status (now in center stack) ─── */
 .status-row {
   display: flex;
   align-items: center;
@@ -199,4 +178,22 @@
 .controls-hint span {
   color: rgba(100, 170, 255, 0.6);
   font-weight: bold;
+}
+
+/* ─── Mobile ─── */
+@media (max-width: 767px) {
+  * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .speed-indicator { bottom: 20px !important; }
+  .speed-value { font-size: 24px !important; }
+  .speed-label { font-size: 9px !important; }
+  .flight-mode { bottom: 50px !important; font-size: 10px !important; padding: 1px 6px !important; }
+  .throttle-bar, .boost-bar { bottom: 60px !important; }
+  .throttle-track, .boost-track { height: 50px !important; }
+  .ship-status { bottom: 15px !important; right: 10px !important; font-size: 9px !important; }
+  .controls-hint { top: 4px !important; left: 4px !important; font-size: 8px !important; }
+  .hud-fps { top: 6px !important; right: 8px !important; font-size: 9px !important; }
+  .radar-container { top: 2px !important; left: 2px !important; bottom: auto !important; }
+  .radar-container canvas { width: 100px !important; height: 100px !important; }
+  .controls-hint { display: none !important; }
+  #hud-center { bottom: 2% !important; }
 }

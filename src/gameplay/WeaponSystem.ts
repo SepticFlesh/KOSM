@@ -116,7 +116,7 @@ export class WeaponSystem {
       b.life -= dt;
       if (b.life <= 0) {
         this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
-        b.head.material.dispose(); b.trail.material.dispose();
+        (b.head.material as THREE.Material).dispose(); (b.trail.material as THREE.Material).dispose();
         b.head.geometry.dispose(); b.trail.geometry.dispose();
         this.bolts.splice(i, 1);
         continue;
@@ -150,7 +150,7 @@ export class WeaponSystem {
   clearAll(): void {
     for (const b of this.bolts) {
       this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
-      b.head.material.dispose(); b.trail.material.dispose();
+      (b.head.material as THREE.Material).dispose(); (b.trail.material as THREE.Material).dispose();
       b.head.geometry.dispose(); b.trail.geometry.dispose();
     }
     this.bolts.length = 0;

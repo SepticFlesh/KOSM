@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SeededRNG } from '../utils/rng';
+import { SeededRNG, hash2D } from '../utils/rng';
 
 export class Planet {
   private scene: THREE.Scene;
@@ -123,7 +123,7 @@ export class Planet {
     if (mat) mat.map = tex;
   }
 
-  private fbm(rng: SeededRNG, x: number, y: number, octaves: number): number {
+  private fbm(_rng: SeededRNG, x: number, y: number, octaves: number): number {
     let v = 0, a = 1, f = 1, m = 0;
     for (let i = 0; i < octaves; i++) { v += a * this.noise(x * f, y * f); m += a; a *= 0.5; f *= 2; }
     return v / m;
@@ -133,14 +133,8 @@ export class Planet {
     const ix = Math.floor(x), iy = Math.floor(y);
     const fx = x - ix, fy = y - iy;
     const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-    return (this.hash(ix, iy) * (1 - sx) * (1 - sy) + this.hash(ix + 1, iy) * sx * (1 - sy) +
-            this.hash(ix, iy + 1) * (1 - sx) * sy + this.hash(ix + 1, iy + 1) * sx * sy);
-  }
-
-  private hash(x: number, y: number): number {
-    let h = x * 374761393 + y * 668265263 + this.seed;
-    h = (h ^ (h >> 13)) * 1274126177; h = h ^ (h >> 16);
-    return (h & 0x7fffffff) / 0x7fffffff;
+    return (hash2D(ix, iy, this.seed) * (1 - sx) * (1 - sy) + hash2D(ix + 1, iy, this.seed) * sx * (1 - sy) +
+            hash2D(ix, iy + 1, this.seed) * (1 - sx) * sy + hash2D(ix + 1, iy + 1, this.seed) * sx * sy);
   }
 
   private createMesh(): void {

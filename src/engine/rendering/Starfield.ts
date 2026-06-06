@@ -92,7 +92,7 @@ export class Starfield {
       // Больше звёзд у внутреннего края
       const t = Math.pow(Math.random(), 2);
       const radius = innerRadius + t * (outerRadius - innerRadius);
-      const height = (Math.random() - 0.5) * 5000 * (1 - t * 0.9); // То��ьше к краю
+      const height = (Math.random() - 0.5) * 5000 * (1 - t * 0.9); // Тоньше к краю
 
       positions[i * 3] = Math.cos(angle) * radius;
       positions[i * 3 + 1] = height;

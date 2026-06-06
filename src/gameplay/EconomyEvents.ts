@@ -35,7 +35,7 @@ export function generateEvents(seed: number): EconomyEvent[] {
 }
 
 /** Apply event modifiers to goods prices */
-export function applyEvents(goods: Array<{ id: string; price: number; name: string }>, events: EconomyEvent[]): Array<{ id: string; name: string; price: number; playerQty: number; stationQty: number }> {
+export function applyEvents(goods: Array<{ id: string; price: number; name: string; stationQty: number }>, events: EconomyEvent[]): Array<{ id: string; name: string; price: number; playerQty: number; stationQty: number }> {
   return goods.map(g => {
     let mod = 1.0;
     for (const ev of events) {

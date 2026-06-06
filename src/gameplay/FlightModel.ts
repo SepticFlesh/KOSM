@@ -3,14 +3,12 @@ import * as THREE from 'three';
 /**
  * Режимы полёта
  */
-export enum FlightMode {
-  /** Полная ньютоновская физика, 6 степеней свободы */
-  Realistic = 'realistic',
-  /** Компенсация вращения, гашение боковой скорости */
-  FlightAssist = 'flight_assist',
-  /** Автоматическое поддержание скорости */
-  Cruise = 'cruise',
-}
+export const FlightMode = {
+  Realistic: 'realistic',
+  FlightAssist: 'flight_assist',
+  Cruise: 'cruise',
+} as const;
+export type FlightMode = (typeof FlightMode)[keyof typeof FlightMode];
 
 /**
  * Параметры корабля

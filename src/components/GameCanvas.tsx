@@ -14,14 +14,97 @@ import { Universe } from '../world/Universe';
  * Компонент-обёртка для игрового canvas.
  * Инициализирует движок, управляет pointer lock для Elite-style контроля.
  */
-export function GameCanvas() {
+export function GameCanvas({ mobile }: { mobile?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
+  const inputRef = useRef<any>(null);
   const hudSyncRef = useRef<number>(0);
   const initDoneRef = useRef(false);
   const [pointerLocked, setPointerLocked] = useState(false);
+  const mobileLockedRef = useRef({ locked: false });
+  const playerShipRef = useRef<any>(null);
 
-  const { openTrade, closeTrade } = gameState;
+  // Touch controls: top 3/4 = rotate, bottom 1/4 = buttons
+  useEffect(() => {
+    if (!mobile) return;
+    const activeTouches: Record<number, { sx: number; sy: number; startY: number; zone: string; throttleStart: number }> = {};
+    let throttleVal = 0.3;
+    const firing = { v: false };
+    let tdX = 0, tdY = 0;
+    let boostActive = false;
+
+    const zone = (x: number, y: number) => {
+      if (y < window.innerHeight * 0.75) return 'rotate';
+      const w = window.innerWidth;
+      const s = Math.floor(x / (w / 4));
+      if (s === 0) return 'boost';
+      if (s === 1 || s === 2) return 'fire';
+      return 'gas';
+    };
+
+    const ts = (e: TouchEvent) => {
+      if (!mobileLockedRef.current.locked) return;
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const z = zone(t.clientX, t.clientY);
+        activeTouches[t.identifier] = { sx: t.clientX, sy: t.clientY, startY: t.clientY, zone: z, throttleStart: throttleVal };
+        if (z === 'boost') boostActive = true;
+        if (z === 'fire') firing.v = true;
+      }
+    };
+    const tm = (e: TouchEvent) => {
+      if (!mobileLockedRef.current.locked) return;
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const prev = activeTouches[t.identifier];
+        if (!prev) continue;
+        if (prev.zone === 'rotate') {
+          tdX = (t.clientX - prev.sx) * 0.12;
+          tdY = (t.clientY - prev.sy) * 0.12;
+        }
+        if (prev.zone === 'gas') {
+          // Drag up = increase, down = decrease
+          throttleVal = Math.max(0, Math.min(1, prev.throttleStart - (t.clientY - prev.startY) * 0.008));
+        }
+        activeTouches[t.identifier] = { ...prev };
+      }
+    };
+    const te = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const prev = activeTouches[e.changedTouches[i].identifier];
+        if (prev?.zone === 'boost') boostActive = false;
+        if (prev?.zone === 'fire') firing.v = false;
+        if (prev?.zone === 'rotate') { tdX = 0; tdY = 0; }
+        delete activeTouches[e.changedTouches[i].identifier];
+      }
+    };
+
+    window.addEventListener('touchstart', ts, { passive: false });
+    window.addEventListener('touchmove', tm, { passive: false });
+    window.addEventListener('touchend', te);
+    window.addEventListener('touchcancel', te);
+
+    const interval = setInterval(() => {
+      const ship = playerShipRef.current;
+      if (!ship) return;
+      (ship as any).getTouchThrottle = () => throttleVal;
+      (ship as any).getTouchFiring = () => firing.v;
+      (ship as any).getTouchDX = () => tdX;
+      (ship as any).getTouchDY = () => tdY;
+      (ship as any).getTouchBoost = () => boostActive;
+    }, 200);
+
+    return () => {
+      window.removeEventListener('touchstart', ts);
+      window.removeEventListener('touchmove', tm);
+      window.removeEventListener('touchend', te);
+      window.removeEventListener('touchcancel', te);
+      clearInterval(interval);
+    };
+  }, [mobile]);
+
 
   // Отслеживаем pointer lock
   useEffect(() => {
@@ -69,6 +152,9 @@ export function GameCanvas() {
       const camera = engine.getCamera();
       const playerShip = sceneManager.createPlayerShip(camera);
       playerShip.attachInput(engine.getInput());
+      inputRef.current = engine.getInput();
+      playerShipRef.current = playerShip;
+      if (mobile) playerShip.mobileMode = true;
 
       // Автонаведение: колбэки для поиска врагов
       let enemyIdCounter = 0;
@@ -115,7 +201,7 @@ export function GameCanvas() {
           // Clear trade cache
           tradeGoodsCache = null;
           console.log('[FTL] Jumped to', nextSys.name);
-          (gameState as any).jumpFlashTime = Date.now();
+          gameState.jumpFlashTime = Date.now();
           soundManager.startMusic(nextSys.id);
           // Story: complete delivery if on step 2
           if (gameState.getStoryStep() === 2) {
@@ -269,13 +355,13 @@ export function GameCanvas() {
       console.log('[KOSM] Ready. Click to lock mouse, Esc to release.');
 
       const starPos = starSystem.getStarPosition();
-      startHUDSync(engine, starPos, playerShip, universe);
+      startHUDSync(engine, starPos, playerShip as any, universe);
     }
 
     function startHUDSync(
       eng: Engine,
       starPos: THREE.Vector3,
-      ship: ReturnType<typeof eng.getSceneManager>['getPlayerShip'],
+      ship: any,
       univ: Universe
     ) {
       let lastSave = Date.now();
@@ -305,7 +391,7 @@ export function GameCanvas() {
             throttle: fm.state.throttle,
             boostEnergy: fm.state.boostEnergy,
             shield,
-            hull: 100,
+            hull: gameState.player.hull,
             flightMode: fm.state.mode,
             distanceToStar: shipPos.distanceTo(starPos),
             starName: univ.getCurrentSystem().name,
@@ -421,10 +507,17 @@ export function GameCanvas() {
   }, []);
 
   // Клик по canvas → захват мыши для управления кораблём
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
     soundManager.resume();
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // On mobile, just enable controls
+    if (mobile) {
+      setPointerLocked(true);
+      mobileLockedRef.current.locked = true;
+      return;
+    }
     if (!document.pointerLockElement) {
       canvas.requestPointerLock();
     }
@@ -438,19 +531,28 @@ export function GameCanvas() {
         tabIndex={0}
         autoFocus
         onClick={handleClick}
+        onTouchEnd={handleClick}
         style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair' }}
       />
-      {/* Подсказка пока мышь не захвачена — кликабельна */}
+      {/* Mobile zone backgrounds (subtle, no labels) */}
+      {mobile && pointerLocked && (
+        <>
+          <div style={{ position:'absolute',bottom:0,left:0,width:'25%',height:'25%',background:'rgba(68,170,255,0.06)',zIndex:14,pointerEvents:'none'}} />
+          <div style={{ position:'absolute',bottom:0,left:'25%',width:'50%',height:'25%',background:'rgba(255,50,0,0.06)',zIndex:14,pointerEvents:'none'}} />
+          <div style={{ position:'absolute',bottom:0,right:0,width:'25%',height:'25%',background:'rgba(255,170,0,0.06)',zIndex:14,pointerEvents:'none'}} />
+        </>
+      )}
       {!pointerLocked && (
         <div
           onClick={handleClick}
+          onTouchEnd={handleClick}
           style={{
             position: 'absolute',
-            top: '10%',
+            top: mobile ? '15%' : '10%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             color: '#4af',
-            fontSize: '18px',
+            fontSize: mobile ? '22px' : '18px',
             fontFamily: '"Courier New", monospace',
             zIndex: 20,
             textAlign: 'center',
@@ -459,8 +561,8 @@ export function GameCanvas() {
             cursor: 'pointer',
           }}
         >
-          <div style={{ fontSize: '32px', marginBottom: '8px' }}>🖱️</div>
-          CLICK TO FLY
+          <div style={{ fontSize: mobile ? '40px' : '32px', marginBottom: '8px' }}>🖱️</div>
+          {mobile ? 'TAP TO FLY' : 'CLICK TO FLY'}
         </div>
       )}
     </>

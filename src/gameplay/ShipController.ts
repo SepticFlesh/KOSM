@@ -153,7 +153,6 @@ export class ShipController {
       { z: -2.0, bodyW: 0.03, bodyH: 0.02, wingSpan: 0.5, wingTipY: -0.2, wingTipH: 0.02 },
     ];
 
-    const ringsPerSection = 32; // точек по окружности фюзеляжа
     // Фиксированный набор: правая половина 12 точек (0..11) +
     // зеркало 10 точек (10..1) = 22 вершины на кольцо
     const RING_SIZE = 22;
@@ -306,7 +305,7 @@ export class ShipController {
   public addShake(amount: number) { this.shakeAmount = Math.max(this.shakeAmount, amount); }
 
   /** Update only mesh + camera (no input/physics) — for warp transition */
-  updateMeshOnly(dt: number): void {
+  updateMeshOnly(_dt: number): void {
     this.updateMesh();
     // Snap camera close to ship during high-speed warp
     this.camera.position.copy(this.flightModel.state.position)
@@ -391,11 +390,17 @@ export class ShipController {
 
   public inputEnabled = true;
 
+  public mobileMode = false;
+
   private processInput(dt: number): void {
     if (!this.inputEnabled) return;
     const fm = this.flightModel;
     const inp = this.input;
     const C = Controls;
+    // On mobile, always allow input (no pointer lock needed)
+    if (this.mobileMode && !inp.isPointerLockedState()) {
+      (inp as any).isPointerLockedState = () => true;
+    }
 
     // ── Тяга ──
     const vertUp = this.anyKey(C.verticalUp);
@@ -406,8 +411,12 @@ export class ShipController {
     const mouse = inp.getMouseDelta();
     // Mouse only when pointer locked
     const mouseActive = inp.isPointerLockedState();
-    let pitchInput = mouseActive ? mouse.y * -C.mouseSensitivity : 0;
-    let yawInput = mouseActive ? mouse.x * C.mouseSensitivity : 0;
+    // Mouse or touch rotation
+    const touchDX = this.getTouchDX ? this.getTouchDX() : 0;
+    const touchDY = this.getTouchDY ? this.getTouchDY() : 0;
+    const useMouse = mouseActive || touchDX !== 0 || touchDY !== 0;
+    let pitchInput = useMouse ? (mouseActive ? mouse.y : touchDY) * -C.mouseSensitivity : 0;
+    let yawInput = useMouse ? (mouseActive ? mouse.x : touchDX) * C.mouseSensitivity : 0;
 
     if (this.anyKey(C.pitchUp)) pitchInput += 1;
     if (this.anyKey(C.pitchDown)) pitchInput -= 1;
@@ -495,15 +504,20 @@ export class ShipController {
     if (this.anyKeyJustPressed(C.throttleDown)) fm.setThrottle(Math.max(0, fm.state.throttle - 0.05));
     if (tUp) fm.setThrottle(Math.min(1, fm.state.throttle + 0.25 * dt));
     if (tDown) fm.setThrottle(Math.max(0, fm.state.throttle - 0.25 * dt));
+    // Touch throttle
+    const touchThr = this.getTouchThrottle;
+    if (touchThr) fm.setThrottle(touchThr());
 
     const wheel = inp.getMouseWheel();
     if (wheel !== 0) fm.setThrottle(Math.max(0, Math.min(1, fm.state.throttle - wheel * C.throttleWheelSpeed)));
 
     // ── Форсаж ──
-    fm.setBoost(this.anyKey(C.boost));
+    const touchBoost = this.getTouchBoost ? this.getTouchBoost() : false;
+    fm.setBoost(this.anyKey(C.boost) || touchBoost);
 
     // ── Огонь ──
-    if ((C.fireMouse >= 0 && inp.isPointerLockedState() && inp.isMouseDown(C.fireMouse)) || this.anyKey(C.fire)) {
+    const touchFiring = this.getTouchFiring ? this.getTouchFiring() : false;
+    if ((C.fireMouse >= 0 && inp.isPointerLockedState() && inp.isMouseDown(C.fireMouse)) || this.anyKey(C.fire) || touchFiring) {
       this.weaponSystem.fire(fm.state.position, fm.state.orientation);
     }
 
@@ -598,6 +612,13 @@ export class ShipController {
   public onTradeRequest: (() => void) | null = null;
   public onJumpRequest: (() => void) | null = null;
   public onMineRequest: (() => void) | null = null;
+
+  // Touch control interface (set by GameCanvas)
+  getTouchThrottle?: () => number;
+  getTouchFiring?: () => boolean;
+  getTouchDX?: () => number;
+  getTouchDY?: () => number;
+  getTouchBoost?: () => boolean;
   private lockedEnemyId: number | null = null;
   private wasXPressed = false;
   public targetDistance = 0;

@@ -15,8 +15,3 @@ export function generateStationName(seed: number): string {
   return `${s1} ${s2} ${generateName(seed + 100).toUpperCase()}`;
 }
 
-export function generatePilotName(seed: number): string {
-  const first = ['Рекс', 'Зак', 'Кара', 'Декс', 'Нова', 'Векс', 'Мира', 'Рей', 'Кай', 'Зои', 'Аш', 'Тор'];
-  const last = ['Хан', 'Соло', 'Старк', 'Восс', 'Кейн', 'Дракс', 'Некс', 'Фрост', 'Блейд', 'Сторм', 'Ридж', 'Кросс'];
-  return `${first[seed % first.length]} ${last[(seed * 5) % last.length]}`;
-}

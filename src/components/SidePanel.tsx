@@ -34,7 +34,7 @@ function MapMini({ data }: any) {
   return <canvas ref={cvRef} />;
 }
 
-export function SidePanel() {
+export function SidePanel({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
   const credits = useGameStore(s => s.playerCredits);
   const cargoU = useGameStore(s => s.cargoUsed);
   const cargoM = useGameStore(s => s.cargoMax);
@@ -47,11 +47,16 @@ export function SidePanel() {
 
   return (
     <div style={{
-      width: 300, height: '100vh', background: 'rgba(0,5,20,0.95)',
-      borderLeft: '1px solid rgba(68,170,255,0.3)', color: '#adf',
-      fontFamily: '"Courier New", monospace', fontSize: 11,
+      width: mobile ? '100%' : 300, height: '100vh', background: 'rgba(0,5,20,0.95)',
+      borderLeft: mobile ? 'none' : '1px solid rgba(68,170,255,0.3)', color: '#adf',
+      fontFamily: '"Courier New", monospace', fontSize: mobile ? 13 : 11,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
+      {mobile && (
+        <div style={{ textAlign: 'right', padding: '4px 8px' }}>
+          <button onClick={onClose} style={{ background: '#333', color: '#f44', border: '1px solid #f44', cursor: 'pointer', fontFamily: 'inherit', fontSize: 16, padding: '4px 12px' }}>✕</button>
+        </div>
+      )}
       {/* Reputation */}
       <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(68,170,255,0.2)', fontSize: 10 }}>
         {['federation','miners','traders','pirates'].map(id => {
@@ -104,7 +109,7 @@ export function SidePanel() {
               <div key={m.id} style={{ marginBottom: 3, opacity: m.completed?0.4:1, fontSize: 10 }}>
                 <div style={{ color: '#fff' }}>{m.title}</div>
                 <div style={{ color: '#6cf' }}>{m.description}</div>
-                <div style={{ color: m.completed?'#4f4':'#fa4' }}>{m.completed?'✓':'${m.progress}/${m.target}'} — {m.reward} Cr</div>
+                <div style={{ color: m.completed?'#4f4':'#fa4' }}>{m.completed ? '✓' : `${m.progress}/${m.target}`} — {m.reward} Cr</div>
               </div>
             ))}
           </div>

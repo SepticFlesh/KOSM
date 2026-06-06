@@ -37,10 +37,6 @@ const STORY: StoryStep[] = [
   },
 ];
 
-export function getStoryMissions(): StoryStep[] {
-  return STORY;
-}
-
 export function getStoryStep(index: number): StoryStep | null {
   return STORY[index] || null;
 }

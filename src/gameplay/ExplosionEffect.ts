@@ -213,7 +213,6 @@ export class ExplosionEffect {
           posArr[i*3+2] += sys.vels[i].z * dt;
         }
 
-        const lt = Math.max(0, sys.lifes[i] / sys.maxLife);
         colArr[i*3] *= 0.995;
         colArr[i*3+1] *= 0.99;
         colArr[i*3+2] *= 0.985;

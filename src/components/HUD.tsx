@@ -55,39 +55,52 @@ export function HUD() {
       <div id="hud-dmg" style={{ position:'absolute',top:0,left:0,width:'100%',height:'100%',background:'rgba(255,0,0,0)',pointerEvents:'none',zIndex:100,display:'none' }} />
       <div id="hud-hit" style={{ position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',color:'rgba(255,100,0,0)',fontSize:28,fontWeight:'bold',pointerEvents:'none',zIndex:101,textShadow:'0 0 10px rgba(255,100,0,0.8)',display:'none' }}>✕</div>
 
+      {/* Top-left: system name + FPS */}
       <div className="hud-fps">
         <div style={{ color: '#fa4', marginBottom: 2 }} id="hud-starname">Нова</div>
         <span id="hud-fps">60 FPS</span>
       </div>
 
-      <div id="hud-target" style={{ position:'absolute',top:'40%',left:'50%',transform:'translate(-50%,-50%)',color:'#f84',fontSize:11,fontFamily:'"Courier New",monospace',pointerEvents:'none',zIndex:10,textShadow:'0 0 6px rgba(255,100,0,0.6)',textAlign:'center',display:'none' }}>TARGET: 0 M</div>
-
-      <div className="speed-indicator">
-        <div className="speed-value" id="hud-speed">0</div>
-        <div className="speed-label">M/S</div>
+      {/* Top-right: distance + cargo */}
+      <div id="hud-topright" style={{ position:'absolute',top:8,right:8,fontSize:10,color:'#6cf',fontFamily:'"Courier New",monospace',pointerEvents:'none',zIndex:10,textAlign:'right' }}>
+        <div id="hud-dist">STAR: 0 M</div>
+        <div id="hud-cargo" style={{ color:'#fa4' }}>CARGO: 0/20 T</div>
       </div>
 
-      <div className="flight-mode" id="hud-mode">ASSIST</div>
+      <div id="hud-target" style={{ position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',color:'#f84',fontSize:11,fontFamily:'"Courier New",monospace',pointerEvents:'none',zIndex:10,textShadow:'0 0 6px rgba(255,100,0,0.6)',textAlign:'center',display:'none' }}>TARGET: 0 M</div>
 
+      {/* Center stack: MODE → SPEED → SHIELD → HULL */}
+      <div id="hud-center" style={{ position:'absolute',bottom:'2%',left:'50%',transform:'translateX(-50%)',textAlign:'center',pointerEvents:'none',zIndex:10,fontFamily:'"Courier New",monospace' }}>
+        <div className="flight-mode" id="hud-mode" style={{ position:'static',margin:'0 auto 4px',display:'inline-block' }}>ASSIST</div>
+        <div className="speed-value" id="hud-speed" style={{ fontSize:32,color:'#4af',lineHeight:1,textShadow:'0 0 10px rgba(68,170,255,0.5)' }}>0</div>
+        <div className="speed-label" style={{ fontSize:10,color:'#6cf',marginBottom:6 }}>M/S</div>
+        <div className="status-row" style={{ justifyContent:'center',marginBottom:2 }}>
+          <span className="status-label">SHIELD</span>
+          <div className="status-bar" style={{ width:100 }}><div className="status-fill shield" id="hud-shield" style={{ width:'100%' }} /></div>
+          <span className="status-value" id="hud-shieldval">100%</span>
+        </div>
+        <div className="status-row" style={{ justifyContent:'center' }}>
+          <span className="status-label">HULL</span>
+          <div className="status-bar" style={{ width:100 }}><div className="status-fill hull" id="hud-hull" style={{ width:'100%' }} /></div>
+          <span className="status-value" id="hud-hullval">100%</span>
+        </div>
+      </div>
+
+      {/* THR bar (left) */}
       <div className="throttle-bar">
         <div className="throttle-label">THR</div>
         <div className="throttle-track"><div className="throttle-fill" id="hud-thr" style={{ height:'0%' }} /></div>
         <div className="throttle-value" id="hud-thrval">0%</div>
       </div>
 
+      {/* BST bar (left) */}
       <div className="boost-bar">
         <div className="boost-label">BST</div>
         <div className="boost-track"><div className="boost-fill" id="hud-bst" style={{ height:'100%' }} /></div>
         <div className="throttle-value" id="hud-bstval" style={{ color:'#fa4' }}>100%</div>
       </div>
 
-      <div className="ship-status">
-        <div className="status-row"><span className="status-label">SHIELD</span><div className="status-bar"><div className="status-fill shield" id="hud-shield" style={{ width:'100%' }} /></div><span className="status-value" id="hud-shieldval">100%</span></div>
-        <div className="status-row"><span className="status-label">HULL</span><div className="status-bar"><div className="status-fill hull" id="hud-hull" style={{ width:'100%' }} /></div><span className="status-value" id="hud-hullval">100%</span></div>
-        <div className="status-distance" id="hud-dist">STAR: 0 M</div>
-        <div className="status-distance" id="hud-cargo" style={{ color:'#fa4' }}>CARGO: 0/20 T</div>
-      </div>
-
+      {/* Radar (bottom-left) */}
       <div className="radar-container">
         <div className="radar-label">SCANNER</div>
         <RadarCanvas />

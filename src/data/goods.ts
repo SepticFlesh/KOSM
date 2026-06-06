@@ -31,6 +31,17 @@ export const GOODS: TradeGood[] = [
 
 export type EconomyType = 'agriculture' | 'mining' | 'industrial' | 'hightech' | 'military' | 'trading';
 
+export const ECONOMY_TYPES: EconomyType[] = ['agriculture', 'mining', 'industrial', 'hightech', 'military', 'trading'];
+
+export const ECONOMY_RU_NAMES: Record<EconomyType, string> = {
+  agriculture: 'Аграрная',
+  mining: 'Горнодобывающая',
+  industrial: 'Индустриальная',
+  hightech: 'Высокотехнологичная',
+  military: 'Военная',
+  trading: 'Торговая',
+};
+
 // Price modifiers per economy type
 export const ECONOMY_MODIFIERS: Record<EconomyType, Partial<Record<string, number>>> = {
   agriculture: { grain: 0.6, meat: 0.7, water: 0.5, chips: 1.5, droids: 1.8, fuel: 1.3 },

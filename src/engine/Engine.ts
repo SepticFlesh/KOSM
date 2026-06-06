@@ -5,8 +5,8 @@ import { AssetLoader } from './AssetLoader';
 import { Starfield } from './rendering/Starfield';
 
 /**
- * Г�авный игровой цикл.
- * Управляет �ендером, �ценой та симуляцией.
+ * Главный игровой цикл.
+ * Управляет рендером, сценой и симуляцией.
  */
 export class Engine {
   private renderer: THREE.WebGLRenderer;
@@ -47,7 +47,7 @@ export class Engine {
   }
 
   /**
-   * Инициализац�я �ендерера, сцены та �вездного неба.
+   * Инициализация рендерера, сцены и звёздного неба.
    */
   async init(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas;
@@ -203,33 +203,32 @@ export class Engine {
       this.currentFps = this.frameCount;
       this.frameCount = 0;
       this.lastFpsUpdate = now;
-      // Adaptive quality
-      if (this.currentFps < 25) {
-        this.renderer.setPixelRatio(0.75);
-      } else if (this.currentFps < 40) {
-        this.renderer.setPixelRatio(1.0);
-      } else {
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      // Adaptive quality (skip on mobile)
+      if (window.innerWidth >= 768) {
+        if (this.currentFps < 25) {
+          this.renderer.setPixelRatio(0.75);
+        } else if (this.currentFps < 40) {
+          this.renderer.setPixelRatio(1.0);
+        } else {
+          this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }
       }
     }
   }
 
   /**
-   * �ендер текущего кадра
+   * Рендер текущего кадра
    */
   private render(): void {
     this.renderer.render(this.scene, this.camera);
   }
 
-  private quality = 'high';
   private onResize(): void {
     const pw = this.canvas?.parentElement;
     this.camera.aspect = (pw?.clientWidth || window.innerWidth) / (pw?.clientHeight || window.innerHeight);
     this.camera.updateProjectionMatrix();
     const p = this.canvas?.parentElement;
     this.renderer.setSize(p?.clientWidth || window.innerWidth, p?.clientHeight || window.innerHeight);
-    // Reset quality on resize
-    this.quality = 'high';
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   }
 

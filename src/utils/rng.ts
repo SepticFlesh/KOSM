@@ -1,4 +1,18 @@
 /**
+ * Mulberry32 PRNG — returns a function that produces numbers in [0, 1).
+ * Fast, high-quality, deterministic from seed.
+ */
+export function mulberry32(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) | 0;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/**
  * Seed-based генератор псевдослучайных чисел (ГПСЧ).
  * Использует алгоритм mulberry32.
  * Гарантирует одинаковую последовательность для одного и того же seed.
@@ -55,4 +69,15 @@ export class SeededRNG {
   getState(): number {
     return this.state;
   }
+}
+
+/**
+ * Fast 2D hash function for procedural generation.
+ * Returns a value in [0, 1).
+ */
+export function hash2D(x: number, y: number, seed: number = 0): number {
+  let h = x * 374761393 + y * 668265263 + seed;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return (h & 0x7fffffff) / 0x7fffffff;
 }

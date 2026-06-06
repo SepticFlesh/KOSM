@@ -8,8 +8,7 @@ export interface SystemInfo {
 }
 
 import { generateName } from '../utils/nameGen';
-
-const ECONOMY_TYPES = ['Аграрная', 'Горнодобывающая', 'Индустриальная', 'Высокотехнологичная', 'Военная', 'Торговая'];
+import { ECONOMY_RU_NAMES, ECONOMY_TYPES } from '../data/goods';
 
 export class Universe {
   public systems: SystemInfo[] = [];
@@ -18,13 +17,15 @@ export class Universe {
   constructor(count: number = 32) {
     for (let i = 0; i < count; i++) {
       const hue = (i / count) * 0.3 + Math.random() * 0.08; // yellow to orange
+      const econKey = ECONOMY_TYPES[i % ECONOMY_TYPES.length];
+      const ruName = ECONOMY_RU_NAMES[econKey];
       this.systems.push({
         id: i,
         name: generateName(100 + i * 137),
         seed: 100 + i * 137,
         color: `hsl(${Math.round(hue * 360)}, 90%, 70%)`,
-        economyType: ECONOMY_TYPES[i % ECONOMY_TYPES.length],
-        description: `${ECONOMY_TYPES[i % ECONOMY_TYPES.length]} система. Население: ${(1 + Math.random() * 10).toFixed(1)} млн.`,
+        economyType: ruName,
+        description: `${ruName} система. Население: ${(1 + Math.random() * 10).toFixed(1)} млн.`,
       });
     }
   }

@@ -10,7 +10,6 @@ export class StarSystem {
   private star: THREE.Mesh | null = null;
   private starLight: THREE.PointLight | null = null;
   private planets: Planet[] = [];
-  private asteroidBelt: THREE.Points | null = null;
   private orbitLines: THREE.Line[] = [];
 
   // Масштаб: внешняя планета ~100 000 ед от звезды

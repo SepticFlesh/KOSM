@@ -153,7 +153,7 @@ export class SceneManager {
           // Remove bolt
           const b = bolts[bi];
           this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
-          b.head.material.dispose(); b.trail.material.dispose();
+          (b.head.material as THREE.Material).dispose(); (b.trail.material as THREE.Material).dispose();
           b.head.geometry.dispose(); b.trail.geometry.dispose();
           bolts.splice(bi, 1);
           break;
@@ -177,7 +177,7 @@ export class SceneManager {
         if (dist < 1.5) {
           // Remove bolt
           this.scene.remove(bolt.head); this.scene.remove(bolt.trail); this.scene.remove(bolt.light);
-          bolt.head.material.dispose(); bolt.trail.material.dispose();
+          (bolt.head.material as THREE.Material).dispose(); (bolt.trail.material as THREE.Material).dispose();
           bolt.head.geometry.dispose(); bolt.trail.geometry.dispose();
           enemy.enemyBolts.splice(bi, 1);
           // Apply damage to player

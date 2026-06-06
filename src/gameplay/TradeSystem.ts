@@ -1,5 +1,6 @@
-import { GOODS, ECONOMY_MODIFIERS } from '../data/goods';
+import { GOODS, ECONOMY_MODIFIERS, ECONOMY_TYPES } from '../data/goods';
 import type { EconomyType } from '../data/goods';
+import { mulberry32 } from '../utils/rng';
 
 /**
  * Simple trade system — generates prices based on station economy.
@@ -9,16 +10,8 @@ export class TradeSystem {
   private rng: () => number;
 
   constructor(seed: number = 42) {
-    const types: EconomyType[] = ['agriculture', 'mining', 'industrial', 'hightech', 'military', 'trading'];
-    // Simple seeded RNG
-    let s = seed;
-    this.rng = () => {
-      s |= 0; s = s + 0x6D2B79F5 | 0;
-      let t = Math.imul(s ^ s >>> 15, 1 | s);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) | 0;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-    this.economy = types[Math.floor(this.rng() * types.length)];
+    this.rng = mulberry32(seed);
+    this.economy = ECONOMY_TYPES[Math.floor(this.rng() * ECONOMY_TYPES.length)];
   }
 
   getEconomy(): EconomyType { return this.economy; }

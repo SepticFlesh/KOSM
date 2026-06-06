@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { hash2D } from '../utils/rng';
 
 /**
  * Загрузчик и кеш ассетов.
@@ -9,7 +11,7 @@ import * as THREE from 'three';
  * - Процедурные текстуры
  */
 export class AssetLoader {
-  private gltfLoader: THREE.GLTFLoader | null = null;
+  private gltfLoader: GLTFLoader | null = null;
   private textureLoader: THREE.TextureLoader;
 
   // Кеш
@@ -23,10 +25,10 @@ export class AssetLoader {
   /**
    * Получить GLTFLoader (lazy init — требует импорта из three/examples)
    */
-  private async getGLTFLoader(): Promise<THREE.GLTFLoader> {
+  private async getGLTFLoader(): Promise<GLTFLoader> {
     if (!this.gltfLoader) {
-      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-      this.gltfLoader = new GLTFLoader();
+      const { GLTFLoader: GLTF } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+      this.gltfLoader = new GLTF();
     }
     return this.gltfLoader;
   }
@@ -99,10 +101,10 @@ export class AssetLoader {
     const sx = fx * fx * (3 - 2 * fx);
     const sy = fy * fy * (3 - 2 * fy);
 
-    const h00 = this.hash(ix, iy);
-    const h10 = this.hash(ix + 1, iy);
-    const h01 = this.hash(ix, iy + 1);
-    const h11 = this.hash(ix + 1, iy + 1);
+    const h00 = hash2D(ix, iy);
+    const h10 = hash2D(ix + 1, iy);
+    const h01 = hash2D(ix, iy + 1);
+    const h11 = hash2D(ix + 1, iy + 1);
 
     return (
       h00 * (1 - sx) * (1 - sy) +
@@ -110,13 +112,6 @@ export class AssetLoader {
       h01 * (1 - sx) * sy +
       h11 * sx * sy
     );
-  }
-
-  private hash(x: number, y: number): number {
-    let h = x * 374761393 + y * 668265263;
-    h = (h ^ (h >> 13)) * 1274126177;
-    h = h ^ (h >> 16);
-    return (h & 0x7fffffff) / 0x7fffffff;
   }
 
   /**
