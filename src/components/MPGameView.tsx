@@ -1,25 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Engine } from '../engine/Engine';
+import type { Engine } from '../engine/Engine';
 import { initSharedGame, type GameContext } from '../game/bootstrap';
-import { attachMultiplayer, startMPHUDSync } from '../modes/MultiplayerMode';
+import { attachMultiplayer, startMPHUDSync, type MPContext } from '../modes/MultiplayerMode';
+import { WSClient } from '../network/wsClient';
 import { soundManager } from '../audio/SoundManager';
 import { loadGame } from '../utils/saveLoad';
 import { gameState } from '../ui/store/gameStore';
 
+// Server URL — override via .env
+const WS_URL = import.meta.env?.VITE_WS_URL as string || 'ws://localhost:3001/ws';
+const GITHUB_CLIENT_ID = import.meta.env?.VITE_GITHUB_CLIENT_ID as string || 'Ov23liVSfVq6Idg7NLgM';
+
 /**
- * MPGameView — multiplayer mode wrapper.
- * Инициализирует общий мир + MP-заглушку.
+ * MPGameView — full multiplayer mode.
+ * Connects to WebSocket server, syncs input, renders remote players.
  */
 export function MPGameView({ mobile }: { mobile?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const ctxRef = useRef<GameContext | null>(null);
+  const mpRef = useRef<MPContext | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const stopHudRef = useRef<(() => void) | null>(null);
   const initDoneRef = useRef(false);
   const [pointerLocked, setPointerLocked] = useState(false);
+  const [authState, setAuthState] = useState<'connecting' | 'authenticated' | 'error'>('connecting');
+  const [authError, setAuthError] = useState('');
   const mobileLockedRef = useRef({ locked: false });
+  const playerIdRef = useRef('');
 
   // Pointer lock tracking
   useEffect(() => {
@@ -38,40 +47,134 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
     canvas.focus();
 
     let destroyed = false;
+    let wsClient: WSClient | null = null;
 
     async function init() {
+      // Get or request auth token
+      let token = localStorage.getItem('kosm_mp_token');
+
+      if (!token) {
+        // Open GitHub OAuth popup
+        const width = 600, height = 700;
+        const left = window.screenX + (window.innerWidth - width) / 2;
+        const top = window.screenY + (window.innerHeight - height) / 2;
+        const popup = window.open(
+          `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user`,
+          'github-oauth',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Wait for auth message from popup
+        token = await new Promise<string | null>((resolve) => {
+          const handler = (e: MessageEvent) => {
+            if (e.data?.type === 'kosm_auth' && e.data?.token) {
+              window.removeEventListener('message', handler);
+              resolve(e.data.token);
+            }
+          };
+          window.addEventListener('message', handler);
+          // Timeout after 2 minutes
+          setTimeout(() => {
+            window.removeEventListener('message', handler);
+            resolve(null);
+          }, 120000);
+          // Check if popup closed
+          const checkClosed = setInterval(() => {
+            if (popup?.closed) {
+              clearInterval(checkClosed);
+              window.removeEventListener('message', handler);
+              resolve(null);
+            }
+          }, 500);
+        });
+
+        if (token) {
+          localStorage.setItem('kosm_mp_token', token);
+          playerIdRef.current = localStorage.getItem('kosm_mp_player_id') || '';
+        } else {
+          setAuthState('error');
+          setAuthError('GitHub auth cancelled or timed out');
+          return;
+        }
+      }
+
+      // Connect WebSocket
+      wsClient = new WSClient();
+      wsClient.connect(WS_URL, token);
+
+      // Wait for auth_ok
+      await new Promise<void>((resolve, reject) => {
+        const unsub = wsClient!.onMessage((msg) => {
+          if (msg.type === 'auth_ok') {
+            playerIdRef.current = msg.payload.playerId;
+            localStorage.setItem('kosm_mp_player_id', msg.payload.playerId);
+            setAuthState('authenticated');
+            unsub();
+            resolve();
+          } else if (msg.type === 'auth_error') {
+            setAuthError(msg.payload.reason);
+            setAuthState('error');
+            unsub();
+            reject(new Error(msg.payload.reason));
+          }
+        });
+        setTimeout(() => {
+          unsub();
+          if (authState !== 'authenticated') {
+            setAuthError('Connection timeout');
+            setAuthState('error');
+            reject(new Error('Connection timeout'));
+          }
+        }, 10000);
+      });
+
+      if (destroyed) return;
+
+      // Init shared game
       const ctx = await initSharedGame(canvas!, 'multiplayer', mobile ?? false);
       if (destroyed) return;
+
       ctxRef.current = ctx;
       engineRef.current = ctx.engine;
 
-      // Attach MP callbacks
-      cleanupRef.current = attachMultiplayer(ctx.engine, ctx.universe, ctx.playerShip);
+      // Attach MP networking
+      const { mpCtx, cleanup } = attachMultiplayer(
+        ctx.engine, ctx.universe, ctx.playerShip,
+        wsClient!, playerIdRef.current,
+      );
+      mpRef.current = mpCtx;
+      cleanupRef.current = cleanup;
 
       // Start MP HUD sync
       const starSystem = ctx.engine.getSceneManager().getStarSystem();
       const starPos = starSystem?.getStarPosition() ?? new THREE.Vector3();
       stopHudRef.current = startMPHUDSync(ctx.engine, starPos, ctx.playerShip, ctx.universe);
 
-      // Start music
-      const currentSys = ctx.universe.getCurrentSystem();
-      soundManager.startMusic(currentSys.id);
+      // Music
+      soundManager.startMusic(ctx.universe.getCurrentSystem().id);
 
-      // Load saved credits/cargo (shared with SP via localStorage)
+      // Load saved credits/cargo
       const saved = loadGame();
       if (saved) {
         gameState.loadProgress(saved.credits, saved.cargoUsed, saved.missionProgress || {});
       }
 
-      console.log('[MP] Multiplayer mode ready (stub)');
+      console.log('[MP] Multiplayer ready. Player:', playerIdRef.current);
     }
 
-    init();
+    init().catch((err) => {
+      console.error('[MP] Init failed:', err);
+      if (!authError) {
+        setAuthError(err.message || 'Connection failed');
+        setAuthState('error');
+      }
+    });
 
     return () => {
       destroyed = true;
       stopHudRef.current?.();
       cleanupRef.current?.();
+      wsClient?.disconnect();
       if (engineRef.current) {
         engineRef.current.stop();
         engineRef.current = null;
@@ -94,6 +197,43 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
       canvas.requestPointerLock();
     }
   };
+
+  // Auth error screen
+  if (authState === 'error') {
+    return (
+      <div style={{
+        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,5,15,0.95)', color: '#f44', fontFamily: '"Courier New", monospace',
+        zIndex: 50,
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 16 }}>Connection Error</div>
+        <div style={{ color: '#f88', marginBottom: 24, fontSize: 14 }}>{authError}</div>
+        <button onClick={() => window.location.reload()} style={{
+          background: '#522', color: '#f44', border: '1px solid #f44',
+          padding: '8px 16px', cursor: 'pointer', fontFamily: 'inherit',
+        }}>Retry</button>
+      </div>
+    );
+  }
+
+  // Connecting screen
+  if (authState === 'connecting') {
+    return (
+      <div style={{
+        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,5,15,0.95)', color: '#fa4', fontFamily: '"Courier New", monospace',
+        zIndex: 50,
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 16 }}>Connecting...</div>
+        <div style={{ color: '#f84', fontSize: 14 }}>Authenticating via GitHub</div>
+        {!localStorage.getItem('kosm_mp_token') && (
+          <div style={{ color: '#f84', fontSize: 12, marginTop: 8 }}>A popup window should open — please allow it</div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
