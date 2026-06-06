@@ -28,6 +28,14 @@ export async function initSharedGame(
 
   const sceneManager = engine.getSceneManager();
 
+  // Set mode on SceneManager (controls AI/hit-detection behavior)
+  sceneManager.mode = mode;
+
+  // Direct DOM HUD for SP; MP provides its own via network
+  if (mode === 'single-player') {
+    engine.registerDirectHUD();
+  }
+
   // Universe — 32 star systems
   const universe = new Universe(32);
   const currentSys = universe.getCurrentSystem();

@@ -2,10 +2,21 @@ import * as THREE from 'three';
 import { soundManager } from '../audio/SoundManager';
 import { gameState } from '../ui/store/gameStore';
 
-/** Get current laser damage from upgrade level */
+/** Get current laser damage from upgrade level (SP default) */
 export function getLaserDamage(): number {
   const lvl = gameState.getUpgradeLevel('laser_damage');
   return [25, 35, 50, 75][lvl - 1] || 25;
+}
+
+/** Injectable damage resolver — for MP, server provides damage value */
+let damageResolver: (() => number) | null = null;
+
+export function setDamageResolver(fn: (() => number) | null): void {
+  damageResolver = fn;
+}
+
+export function resolveDamage(): number {
+  return damageResolver ? damageResolver() : getLaserDamage();
 }
 
 interface LaserBolt {

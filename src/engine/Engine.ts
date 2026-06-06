@@ -133,68 +133,26 @@ export class Engine {
   /**
    * Обновление логики
    */
+  private huDUpdateHandler: ((dt: number) => void) | null = null;
+
+  /** Register a HUD update handler (SP: direct DOM, MP: network-driven) */
+  setHUDHandler(fn: (dt: number) => void): void { this.huDUpdateHandler = fn; }
+  clearHUDHandler(): void { this.huDUpdateHandler = null; }
+
   private update(dt: number, elapsedTime: number): void {
-    // Сначала симуляция (читает накопленные дельты мыши/клавиш)
+    // Симуляция
     this.sceneManager.update(dt, elapsedTime);
-    // Потом сброс дельт для следующего кадра
     this.inputManager.update();
 
-    // Поворот звёздного неба (медленный)
+    // Звёздное небо
     if (this.starfield) {
       this.starfield.update(dt);
     }
 
-    // Direct HUD update
-    const ship = this.sceneManager.getPlayerShip();
-    if (!ship) return;
-    const fm = ship.flightModel;
-    const spd = fm.state.velocity.length();
-    const thr = fm.state.throttle;
-    const bst = fm.state.boostEnergy;
-    const mode = fm.state.mode;
-    const pos = fm.state.position;
-    const starDist = Math.sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z);
-
-    const setText = (id: string, text: string) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    const setStyle = (id: string, prop: string, val: string) => { const el = document.getElementById(id); if (el) (el as any).style[prop] = val; };
-    const setDisplay = (id: string, show: boolean) => { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; };
-
-    setText('hud-speed', Math.round(spd).toLocaleString());
-    setText('hud-fps', this.currentFps + ' FPS');
-    setText('hud-thrval', Math.round(thr * 100) + '%');
-    setText('hud-bstval', Math.round(bst) + '%');
-    setStyle('hud-thr', 'height', (thr * 100) + '%');
-    setStyle('hud-bst', 'height', bst + '%');
-    setStyle('hud-shield', 'width', '100%');
-    setText('hud-shieldval', '100%');
-    setStyle('hud-hull', 'width', '100%');
-    setText('hud-hullval', '100%');
-    setText('hud-dist', 'STAR: ' + Math.round(starDist).toLocaleString() + ' M');
-
-    const modeLabel = mode === 'flight_assist' ? 'ASSIST' : mode === 'cruise' ? 'CRUISE' : 'REAL';
-    const modeColor = mode === 'flight_assist' ? '#4af' : mode === 'cruise' ? '#fa4' : '#f44';
-    const modeEl = document.getElementById('hud-mode');
-    if (modeEl) { modeEl.textContent = modeLabel; (modeEl as any).style.color = modeColor; (modeEl as any).style.borderColor = modeColor; }
-
-    // Target distance
-    const tgtDist = (ship as any).targetDistance || 0;
-    setDisplay('hud-target', tgtDist > 0);
-    if (tgtDist > 0) setText('hud-target', 'TARGET: ' + Math.round(tgtDist) + ' M');
-
-    // Damage/hit flash
-    const now2 = Date.now();
-    const dmgEl = document.getElementById('hud-dmg');
-    if (dmgEl) {
-      const show = (window as any).__kosmLastDmg && now2 - (window as any).__kosmLastDmg < 200;
-      dmgEl.style.display = show ? '' : 'none';
-      if (show) dmgEl.style.background = 'rgba(255,0,0,0.4)';
+    // HUD update (injectable — different for SP vs MP)
+    if (this.huDUpdateHandler) {
+      this.huDUpdateHandler(dt);
     }
-    const hitEl = document.getElementById('hud-hit');
-    if (hitEl) {
-      const show = (window as any).__kosmLastHit && now2 - (window as any).__kosmLastHit < 150;
-      hitEl.style.display = show ? '' : 'none';
-    }
-
 
     // FPS counter + adaptive quality
     this.frameCount++;
@@ -268,5 +226,62 @@ export class Engine {
 
   getElapsedTime(): number {
     return this.totalTime;
+  }
+
+  /**
+   * Register the classic direct-DOM HUD update handler (SP mode).
+   * Updates speed, throttle, shield, hull, mode, target, damage flashes
+   * by writing directly to DOM elements by ID.
+   */
+  registerDirectHUD(): void {
+    this.setHUDHandler(() => {
+      const ship = this.sceneManager.getPlayerShip();
+      if (!ship) return;
+      const fm = ship.flightModel;
+      const spd = fm.state.velocity.length();
+      const thr = fm.state.throttle;
+      const bst = fm.state.boostEnergy;
+      const mode = fm.state.mode;
+      const pos = fm.state.position;
+      const starDist = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+
+      const setText = (id: string, text: string) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+      const setStyle = (id: string, prop: string, val: string) => { const el = document.getElementById(id); if (el) (el as any).style[prop] = val; };
+      const setDisplay = (id: string, show: boolean) => { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; };
+
+      setText('hud-speed', Math.round(spd).toLocaleString());
+      setText('hud-fps', this.currentFps + ' FPS');
+      setText('hud-thrval', Math.round(thr * 100) + '%');
+      setText('hud-bstval', Math.round(bst) + '%');
+      setStyle('hud-thr', 'height', (thr * 100) + '%');
+      setStyle('hud-bst', 'height', bst + '%');
+      setStyle('hud-shield', 'width', '100%');
+      setText('hud-shieldval', '100%');
+      setStyle('hud-hull', 'width', '100%');
+      setText('hud-hullval', '100%');
+      setText('hud-dist', 'STAR: ' + Math.round(starDist).toLocaleString() + ' M');
+
+      const modeLabel = mode === 'flight_assist' ? 'ASSIST' : mode === 'cruise' ? 'CRUISE' : 'REAL';
+      const modeColor = mode === 'flight_assist' ? '#4af' : mode === 'cruise' ? '#fa4' : '#f44';
+      const modeEl = document.getElementById('hud-mode');
+      if (modeEl) { modeEl.textContent = modeLabel; (modeEl as any).style.color = modeColor; (modeEl as any).style.borderColor = modeColor; }
+
+      const tgtDist = (ship as any).targetDistance || 0;
+      setDisplay('hud-target', tgtDist > 0);
+      if (tgtDist > 0) setText('hud-target', 'TARGET: ' + Math.round(tgtDist) + ' M');
+
+      const now2 = Date.now();
+      const dmgEl = document.getElementById('hud-dmg');
+      if (dmgEl) {
+        const show = (window as any).__kosmLastDmg && now2 - (window as any).__kosmLastDmg < 200;
+        dmgEl.style.display = show ? '' : 'none';
+        if (show) dmgEl.style.background = 'rgba(255,0,0,0.4)';
+      }
+      const hitEl = document.getElementById('hud-hit');
+      if (hitEl) {
+        const show = (window as any).__kosmLastHit && now2 - (window as any).__kosmLastHit < 150;
+        hitEl.style.display = show ? '' : 'none';
+      }
+    });
   }
 }

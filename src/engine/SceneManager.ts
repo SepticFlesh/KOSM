@@ -4,7 +4,7 @@ import { ShipController } from '../gameplay/ShipController';
 import { EnemyShip } from '../gameplay/EnemyShip';
 import { ExplosionEffect } from '../gameplay/ExplosionEffect';
 import { SpaceStation } from '../world/SpaceStation';
-import { getLaserDamage } from '../gameplay/WeaponSystem';
+import { resolveDamage } from '../gameplay/WeaponSystem';
 import { MiningSystem } from '../gameplay/MiningSystem';
 import { gameState } from '../ui/store/gameStore';
 import { NebulaSystem } from '../rendering/NebulaSystem';
@@ -13,6 +13,8 @@ import { WarpEffect } from '../rendering/WarpEffect';
 /**
  * Scene manager — all game objects, lifecycle.
  */
+export type GameMode = 'single-player' | 'multiplayer';
+
 export class SceneManager {
   private scene: THREE.Scene;
   private updatables: Array<{ update: (dt: number, elapsed: number) => void }> = [];
@@ -26,6 +28,7 @@ export class SceneManager {
   private nebulaSystem: NebulaSystem | null = null;
   private warpEffect: WarpEffect | null = null;
   public isWarping = false;
+  public mode: GameMode = 'single-player';
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -84,8 +87,8 @@ export class SceneManager {
     for (const obj of this.updatables) {
       obj.update(dt, elapsedTime);
     }
-    // Update enemies
-    if (this.playerShip) {
+    // Update enemies (SP: local AI; MP: positions from server, AI skipped)
+    if (this.mode === 'single-player' && this.playerShip) {
       const playerPos = this.playerShip.flightModel.state.position;
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const e = this.enemies[i];
@@ -129,10 +132,11 @@ export class SceneManager {
       return;
     }
 
-    // Check player → enemy hits
-    this.checkHits();
-    // Check enemy → player hits
-    this.checkPlayerDamage();
+    // Hit detection — SP only (MP is server-authoritative)
+    if (this.mode === 'single-player') {
+      this.checkHits();
+      this.checkPlayerDamage();
+    }
   }
 
   public checkHits(): void {
@@ -147,7 +151,7 @@ export class SceneManager {
         const enemy = this.enemies[ei];
         const dist = bolt.position.distanceTo(enemy.flightModel.state.position);
         if (dist < 2.5) {
-          enemy.takeDamage(getLaserDamage());
+          enemy.takeDamage(resolveDamage());
           gameState.lastHitTime = Date.now();
           (window as any).__kosmLastHit = Date.now();
           // Remove bolt
