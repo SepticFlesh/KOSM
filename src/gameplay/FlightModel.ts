@@ -54,7 +54,7 @@ export const DEFAULT_SHIP_CONFIG: ShipConfig = {
   dragAngular: 0.92,
   maxSpeedAssist: 30,
   maxSpeedCruise: 200,
-  boostMultiplier: 4.0, // форсаж: 30 × 4 = 120 м/с
+  boostMultiplier: 40.0, // форсаж: 30 × 40 = 1200 м/с
   boostCapacity: 100,
   boostRecharge: 15,
 };
@@ -192,7 +192,7 @@ export class FlightModel {
     if (this.boosting && state.boostEnergy > 0) {
       thrustMultiplier = config.boostMultiplier;
       const speedRatio = Math.min(1, state.velocity.length() / config.maxSpeedAssist);
-      state.boostEnergy = Math.max(0, state.boostEnergy - (1.0 + speedRatio * 5.0) * dt);
+      state.boostEnergy = Math.max(0, state.boostEnergy - (0.1 + speedRatio * 0.5) * dt);
     } else {
       state.boostEnergy = Math.min(
         config.boostCapacity,

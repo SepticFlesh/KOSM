@@ -12,7 +12,7 @@ import { soundManager } from '../audio/SoundManager';
  */
 export class ShipController {
   private scene: THREE.Scene;
-  private camera: THREE.Camera;
+  public camera: THREE.Camera;
   public flightModel: FlightModel;
   private input: InputManager;
 
@@ -26,16 +26,12 @@ export class ShipController {
 
   // Space dust around ship
   private spaceDust: THREE.Points | null = null;
-  private dustVelocities: Float32Array | null = null;
   private dustLifetimes: Float32Array | null = null;
   private dustEnabled = true;
   private dustCount = 400;
-  private dustRadius = 25;
 
   // Screen effects
   private shakeAmount = 0;
-  private baseFov = 75;
-  private currentFov = 75;
 
   // Engine particles
   private engineParticles: Array<{
@@ -46,7 +42,7 @@ export class ShipController {
   private particleTexture: THREE.Texture | null = null;
 
   // Камера от третьего лица (сзади-сверху, не кувыркается)
-  private cameraSmoothFactor = 15.0;
+  private cameraSmoothFactor = 75.0; // tighter follow, 5x closer
   private currentCameraPos = new THREE.Vector3();
   private currentCameraLook = new THREE.Vector3();
 
@@ -59,6 +55,7 @@ export class ShipController {
     // Создать визуальное представление корабля
     this.mesh = new THREE.Group();
     this.shipBody = this.createShipMesh();
+    // ship stays at original scale
     this.mesh.add(this.shipBody);
     this.scene.add(this.mesh);
 
@@ -92,15 +89,28 @@ export class ShipController {
     // Космическая пыль
     this.initSpaceDust();
 
-    // Mining beam
-    const beamGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 6);
-    beamGeo.translate(0, 0.5, 0); // pivot at bottom
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0x00ff88, transparent: true, opacity: 0.7, depthWrite: false,
+    // Mining beam — outer glow + inner core
+    const beamOuterGeo = new THREE.CylinderGeometry(0.15, 0.15, 1, 8);
+    beamOuterGeo.translate(0, 0.5, 0);
+    const beamOuterMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff66, transparent: true, opacity: 0.25, depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
-    this.mineBeam = new THREE.Mesh(beamGeo, beamMat);
+    const beamOuter = new THREE.Mesh(beamOuterGeo, beamOuterMat);
+    beamOuter.visible = false;
+    this.scene.add(beamOuter);
+
+    const beamCoreGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 8);
+    beamCoreGeo.translate(0, 0.5, 0);
+    const beamCoreMat = new THREE.MeshBasicMaterial({
+      color: 0x88ffcc, transparent: true, opacity: 0.9, depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.mineBeam = new THREE.Mesh(beamCoreGeo, beamCoreMat);
     this.mineBeam.visible = false;
     this.scene.add(this.mineBeam);
+    // Store outer beam reference
+    (this.mineBeam as any)._outerBeam = beamOuter;
 
     // Начальная позиция камеры (сверху-сзади)
     this.currentCameraPos.copy(this.flightModel.state.position)
@@ -295,6 +305,17 @@ export class ShipController {
   /** Trigger screen shake (called externally when damaged) */
   public addShake(amount: number) { this.shakeAmount = Math.max(this.shakeAmount, amount); }
 
+  /** Update only mesh + camera (no input/physics) — for warp transition */
+  updateMeshOnly(dt: number): void {
+    this.updateMesh();
+    // Snap camera close to ship during high-speed warp
+    this.camera.position.copy(this.flightModel.state.position)
+      .add(new THREE.Vector3(0, 3, -6));
+    this.camera.lookAt(this.flightModel.state.position.clone().add(new THREE.Vector3(0, 0, 10)));
+  }
+
+  resetWarpGlow(): void {}
+
   update(dt: number, _elapsed: number): void {
     if (!this.input) return;
     // Apply engine upgrade
@@ -302,12 +323,6 @@ export class ShipController {
     const speedMul = [1, 1.33, 1.83, 2.5][engLvl - 1] || 1;
     this.flightModel.config.maxSpeedAssist = 30 * speedMul;
     this.flightModel.config.maxSpeedCruise = 200 * speedMul;
-
-    // FOV: wider during boost
-    const targetFov = this.flightModel.boostActive ? this.baseFov + 10 : this.baseFov;
-    this.currentFov += (targetFov - this.currentFov) * Math.min(1, dt * 8);
-    this.camera.fov = this.currentFov;
-    this.camera.updateProjectionMatrix();
 
     // Shake decay
     if (this.shakeAmount > 0.001) this.shakeAmount *= Math.exp(-dt * 8);
@@ -374,7 +389,10 @@ export class ShipController {
     return codes.some(c => this.input.isKeyJustPressed(c));
   }
 
+  public inputEnabled = true;
+
   private processInput(dt: number): void {
+    if (!this.inputEnabled) return;
     const fm = this.flightModel;
     const inp = this.input;
     const C = Controls;
@@ -386,8 +404,10 @@ export class ShipController {
 
     // ── Вращение ──
     const mouse = inp.getMouseDelta();
-    let pitchInput = mouse.y * -C.mouseSensitivity;
-    let yawInput = mouse.x * C.mouseSensitivity;
+    // Mouse only when pointer locked
+    const mouseActive = inp.isPointerLockedState();
+    let pitchInput = mouseActive ? mouse.y * -C.mouseSensitivity : 0;
+    let yawInput = mouseActive ? mouse.x * C.mouseSensitivity : 0;
 
     if (this.anyKey(C.pitchUp)) pitchInput += 1;
     if (this.anyKey(C.pitchDown)) pitchInput -= 1;
@@ -483,7 +503,7 @@ export class ShipController {
     fm.setBoost(this.anyKey(C.boost));
 
     // ── Огонь ──
-    if ((C.fireMouse >= 0 && inp.isMouseDown(C.fireMouse)) || this.anyKey(C.fire)) {
+    if ((C.fireMouse >= 0 && inp.isPointerLockedState() && inp.isMouseDown(C.fireMouse)) || this.anyKey(C.fire)) {
       this.weaponSystem.fire(fm.state.position, fm.state.orientation);
     }
 
@@ -512,6 +532,11 @@ export class ShipController {
     // ── Пыль (B) ──
     if (inp.isKeyJustPressed('KeyB')) {
       this.dustEnabled = !this.dustEnabled;
+    }
+
+    // ── Карта системы (O) ──
+    if (inp.isKeyJustPressed('KeyO')) {
+      gameState.toggleMap();
     }
   }
 
@@ -661,12 +686,11 @@ export class ShipController {
     const N = this.dustCount;
     const pArr = new Float32Array(N * 3);
     const cArr = new Float32Array(N * 3);
-    this.dustVelocities = new Float32Array(N * 3);
     this.dustLifetimes = new Float32Array(N);
 
     const sp = this.flightModel.state.position;
     for (let i = 0; i < N; i++) {
-      const r = 5 + Math.random() * 30;
+      const r = 10 + Math.random() * 60;
       const th = Math.random() * Math.PI * 2;
       const ph = Math.acos(2 * Math.random() - 1);
       pArr[i*3] = sp.x + Math.sin(ph) * Math.cos(th) * r;
@@ -703,26 +727,32 @@ export class ShipController {
 
   /** Обновление космической пыли — поток от скорости */
   private updateSpaceDust(dt: number): void {
-    if (!this.spaceDust || !this.dustVelocities || !this.dustLifetimes) return;
+    if (!this.spaceDust || !this.dustLifetimes) return;
     const posArr = this.spaceDust.geometry.attributes.position.array as Float32Array;
     const vel = this.flightModel.state.velocity;
     const speed = vel.length();
     const N = this.dustCount;
     const shipPos = this.flightModel.state.position;
+    // Dust drifts with ship: normally 0%, during boost 80% of ship velocity
+    const driftFrac = this.flightModel.boostActive ? 0.875 : 0.0;
     for (let i = 0; i < N; i++) {
-      this.dustLifetimes[i] -= dt * (0.3 + speed * 0.02);
+      this.dustLifetimes[i] -= dt * 0.1;
+      // Move dust with ship (reduces apparent streaming)
+      posArr[i*3] += vel.x * driftFrac * dt;
+      posArr[i*3+1] += vel.y * driftFrac * dt;
+      posArr[i*3+2] += vel.z * driftFrac * dt;
       const dx = posArr[i*3] - shipPos.x;
       const dy = posArr[i*3+1] - shipPos.y;
       const dz = posArr[i*3+2] - shipPos.z;
       const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      if (dist > 40 || this.dustLifetimes[i] <= 0) {
-        const r = 5 + Math.random() * 30;
+      if (dist > 80 || this.dustLifetimes[i] <= 0) {
+        const r = 10 + Math.random() * 60;
         const th = Math.random() * Math.PI * 2;
         const ph = Math.acos(2 * Math.random() - 1);
         posArr[i*3] = shipPos.x + Math.sin(ph) * Math.cos(th) * r;
         posArr[i*3+1] = shipPos.y + Math.sin(ph) * Math.sin(th) * r;
         posArr[i*3+2] = shipPos.z + Math.cos(ph) * r;
-        this.dustLifetimes[i] = 0.5 + Math.random() * 1.5;
+        this.dustLifetimes[i] = 5 + Math.random() * 7;
       }
     }
     this.spaceDust.geometry.attributes.position.needsUpdate = true;
@@ -740,23 +770,42 @@ export class ShipController {
 
   private updateMineBeam(): void {
     if (!this.mineBeam) return;
+    const outerBeam = (this.mineBeam as any)._outerBeam as THREE.Mesh;
     const target = this.mineBeamTarget;
-    if (!target) { this.mineBeam.visible = false; return; }
+    if (!target) {
+      this.mineBeam.visible = false;
+      if (outerBeam) outerBeam.visible = false;
+      return;
+    }
     const shipPos = this.flightModel.state.position;
     const gunLocal = new THREE.Vector3(0.55, -0.05, 0.4);
     const gunWorld = gunLocal.applyQuaternion(this.flightModel.state.orientation).add(shipPos);
     const dir = target.clone().sub(gunWorld);
     const dist = dir.length();
-    if (dist < 1 || dist > 100) { this.mineBeam.visible = false; return; }
-    this.mineBeam.visible = true;
-    // Position beam at gun, pointing at target
+    if (dist < 1 || dist > 200) {
+      this.mineBeam.visible = false;
+      if (outerBeam) outerBeam.visible = false;
+      return;
+    }
+    const dirNorm = dir.normalize();
     const mid = gunWorld.clone().add(dir.clone().multiplyScalar(0.5));
+    const pulse = 0.5 + Math.sin(Date.now() * 0.015) * 0.5;
+
+    // Core beam
+    this.mineBeam.visible = true;
     this.mineBeam.position.copy(mid);
     this.mineBeam.scale.y = dist;
-    this.mineBeam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-    // Pulse opacity
-    const mat = this.mineBeam.material as THREE.MeshBasicMaterial;
-    mat.opacity = 0.4 + Math.sin(Date.now() * 0.01) * 0.3;
+    this.mineBeam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirNorm);
+    (this.mineBeam.material as THREE.MeshBasicMaterial).opacity = 0.5 + pulse * 0.4;
+
+    // Outer glow
+    if (outerBeam) {
+      outerBeam.visible = true;
+      outerBeam.position.copy(mid);
+      outerBeam.scale.y = dist;
+      outerBeam.quaternion.copy(this.mineBeam.quaternion);
+      (outerBeam.material as THREE.MeshBasicMaterial).opacity = 0.15 + pulse * 0.2;
+    }
   }
 
   /** Обновить частицы: спавн по таймеру, движение, fade */

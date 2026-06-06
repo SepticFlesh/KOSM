@@ -15,7 +15,7 @@ export class Universe {
   public systems: SystemInfo[] = [];
   public currentSystemIndex = 0;
 
-  constructor(count: number = 5) {
+  constructor(count: number = 32) {
     for (let i = 0; i < count; i++) {
       const hue = (i / count) * 0.3 + Math.random() * 0.08; // yellow to orange
       this.systems.push({

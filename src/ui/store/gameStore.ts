@@ -164,6 +164,10 @@ export const gameState = {
   getReputation(factionId: string): number { return store.getState().reputation[factionId] || 0; },
   get lastDamageTime() { return store.getState().lastDamageTime || 0; },
   set lastDamageTime(v: number) { store.setState({ lastDamageTime: v }); },
+  mapData: null as any,
+  showMap: false,
+  toggleMap() { const s = store.getState(); store.setState({ showMap: !s.showMap }); },
+  setMapData(d: any) { store.setState({ mapData: d }); },
   getStoryStep(): number { return store.getState().storyStep || 0; },
   advanceStory() {
     store.updateState(s => ({ ...s, storyStep: Math.min(4, (s.storyStep || 0) + 1) }));

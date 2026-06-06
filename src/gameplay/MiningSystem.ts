@@ -23,7 +23,7 @@ export class MiningSystem {
   spawn(count: number, aroundPos: THREE.Vector3, spread: number): void {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const dist = 200 + Math.random() * spread;
+      const dist = 50000 + Math.random() * spread;
       const pos = new THREE.Vector3(
         aroundPos.x + Math.cos(angle) * dist,
         aroundPos.y + (Math.random() - 0.5) * 100,

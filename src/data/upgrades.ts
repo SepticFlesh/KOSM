@@ -44,10 +44,10 @@ export const UPGRADES: UpgradeDef[] = [
     name: 'Сканер',
     category: 'scanner',
     levels: [
-      { level: 1, cost: 0, value: 500, description: 'Базовый сканер' },
-      { level: 2, cost: 400, value: 800, description: 'Улучшенный сканер' },
-      { level: 3, cost: 1200, value: 1200, description: 'Дальний сканер' },
-      { level: 4, cost: 3000, value: 2000, description: 'Военный сканер' },
+      { level: 1, cost: 0, value: 5000, description: 'Базовый сканер' },
+      { level: 2, cost: 400, value: 15000, description: 'Улучшенный сканер' },
+      { level: 3, cost: 1200, value: 40000, description: 'Дальний сканер' },
+      { level: 4, cost: 3000, value: 80000, description: 'Военный сканер' },
     ],
   },
 ];

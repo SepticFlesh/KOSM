@@ -63,8 +63,8 @@ export function GameCanvas() {
       const starSystem = sceneManager.createStarSystem(currentSys.seed);
 
       // Space station near the star
-      sceneManager.createStation(new THREE.Vector3(200, 50, -100));
-      sceneManager.spawnAsteroids(15);
+      sceneManager.createStation(new THREE.Vector3(600, 50, -400));
+      sceneManager.spawnAsteroids(30);
 
       const camera = engine.getCamera();
       const playerShip = sceneManager.createPlayerShip(camera);
@@ -109,10 +109,13 @@ export function GameCanvas() {
         const nextIdx = (universe.currentSystemIndex + 1) % universe.systems.length;
         const nextSys = universe.jumpTo(nextIdx);
         if (nextSys) {
-          sceneManager.switchSystem(nextSys.seed, playerShip);
+          playerShip.inputEnabled = false;
+          sceneManager.startWarp(nextSys.seed, playerShip);
+          setTimeout(() => { playerShip.inputEnabled = true; }, 5500);
           // Clear trade cache
           tradeGoodsCache = null;
           console.log('[FTL] Jumped to', nextSys.name);
+          (gameState as any).jumpFlashTime = Date.now();
           soundManager.startMusic(nextSys.id);
           // Story: complete delivery if on step 2
           if (gameState.getStoryStep() === 2) {
@@ -130,7 +133,7 @@ export function GameCanvas() {
       playerShip.onMineRequest = () => {
         const mining = sceneManager.mining;
         if (mining) {
-          const nearest = mining.findNearest(playerShip.flightModel.state.position, 100);
+          const nearest = mining.findNearest(playerShip.flightModel.state.position, 200);
           playerShip.mineBeamTarget = nearest ? nearest.position : null;
         }
         const result = sceneManager.mineAsteroid(
@@ -155,7 +158,7 @@ export function GameCanvas() {
         const station = sceneManager.getStation();
         if (!station) return;
         const dist = playerShip.flightModel.state.position.distanceTo(station.position);
-        if (dist < 50) {
+        if (dist < 15000) {
           if (gameState.tradeOpen) {
             gameState.closeTrade();
           } else {
@@ -240,10 +243,15 @@ export function GameCanvas() {
         }
       };
 
-      playerShip.flightModel.reset(new THREE.Vector3(0, 100, 300));
+      playerShip.flightModel.reset(new THREE.Vector3(600, 250, -800));
 
       // Spawn enemies
       sceneManager.spawnEnemies(4);
+
+      // Ensure HUD state exists before engine starts
+      if (!(window as any).__kosmHUD) {
+        (window as any).__kosmHUD = { speed: 0, throttle: 0, boostEnergy: 100, shield: 100, hull: 100, flightMode: 'flight_assist', distanceToStar: 0, starName: 'Нова', fps: 60, cargoUsed: 0, cargoMax: 20, targetDist: 0 };
+      }
 
       engine.start();
       soundManager.startEngine();
@@ -289,20 +297,24 @@ export function GameCanvas() {
           shield = Math.min(100, shield + dt * 1);
         }
 
-        gameState.updatePlayer({
-          speed: fm.state.velocity.length(),
-          throttle: fm.state.throttle,
-          boostEnergy: fm.state.boostEnergy,
-          shield,
-          flightMode: fm.state.mode,
-          distanceToStar: shipPos.distanceTo(starPos),
-          starName: univ.getCurrentSystem().name,
-          fps: eng.getFps(),
-          cargoUsed: gameState.cargoUsed,
-          cargoMax: gameState.cargoMax,
-          targetDist: (ship as any).targetDistance || 0,
-          targetHealth: (ship as any).targetHealth || 0,
-        });
+        // Update global HUD ref (bypasses React state for performance)
+        const hudRef = (window as any).__kosmHUD;
+        if (hudRef) {
+          Object.assign(hudRef, {
+            speed: fm.state.velocity.length(),
+            throttle: fm.state.throttle,
+            boostEnergy: fm.state.boostEnergy,
+            shield,
+            hull: 100,
+            flightMode: fm.state.mode,
+            distanceToStar: shipPos.distanceTo(starPos),
+            starName: univ.getCurrentSystem().name,
+            fps: eng.getFps(),
+            cargoUsed: gameState.cargoUsed,
+            cargoMax: gameState.cargoMax,
+            targetDist: (ship as any).targetDistance || 0,
+          });
+        }
         soundManager.updateEngine(fm.state.throttle, fm.boostActive);
 
         // Autosave every 10s
@@ -323,9 +335,9 @@ export function GameCanvas() {
         const blips: Array<{ x: number; y: number; height: number; health: number; type: 'enemy' | 'station' }> = [];
 
         // Enemies
-        const radarRange = gameState.getUpgradeLevel('scanner') === 1 ? 500 :
-                           gameState.getUpgradeLevel('scanner') === 2 ? 800 :
-                           gameState.getUpgradeLevel('scanner') === 3 ? 1200 : 2000;
+        const radarRange = gameState.getUpgradeLevel('scanner') === 1 ? 5000 :
+                           gameState.getUpgradeLevel('scanner') === 2 ? 15000 :
+                           gameState.getUpgradeLevel('scanner') === 3 ? 40000 : 80000;
         for (const e of eng.getSceneManager().enemies) {
           const rel = e.flightModel.state.position.clone().sub(shipPos);
           const dist = rel.length();
@@ -360,6 +372,34 @@ export function GameCanvas() {
           });
         }
         gameState.setRadarBlips(blips);
+        (window as any).__kosmRadarBlips = blips;
+
+        // Map data
+        if (Math.floor(Date.now() / 500) !== Math.floor((Date.now() - 100) / 500)) {
+          const mapObjects: any[] = [];
+          mapObjects.push({ x: 0, z: 0, r: 6, color: '#fa4', label: 'Star' });
+          const ss = eng.getSceneManager().getStarSystem();
+          if (ss) {
+            for (const p of ss.getPlanets()) {
+              const pos = p.getPosition();
+              mapObjects.push({ x: pos.x, z: pos.z, r: 3, color: '#6af', label: `P` });
+            }
+          }
+          const st = eng.getSceneManager().getStation();
+          if (st) mapObjects.push({ x: st.position.x, z: st.position.z, r: 4, color: '#4f4', label: 'Station' });
+          const enems = eng.getSceneManager().enemies;
+          for (const e of enems) {
+            mapObjects.push({ x: e.flightModel.state.position.x, z: e.flightModel.state.position.z, r: 2, color: '#f44' });
+          }
+          mapObjects.push({
+            x: shipPos.x, z: shipPos.z, r: 3, color: '#fff', isPlayer: true,
+            angle: Math.atan2(
+              new THREE.Vector3(1,0,0).applyQuaternion(fm.state.orientation).z,
+              new THREE.Vector3(0,0,1).applyQuaternion(fm.state.orientation).z
+            ),
+          });
+          gameState.setMapData({ objects: mapObjects, range: 150000 });
+        }
 
         hudSyncRef.current = requestAnimationFrame(sync);
       };
@@ -398,14 +438,15 @@ export function GameCanvas() {
         tabIndex={0}
         autoFocus
         onClick={handleClick}
+        style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair' }}
       />
       {/* Подсказка пока мышь не захвачена — кликабельна */}
       {!pointerLocked && (
         <div
           onClick={handleClick}
           style={{
-            position: 'fixed',
-            top: '50%',
+            position: 'absolute',
+            top: '10%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             color: '#4af',

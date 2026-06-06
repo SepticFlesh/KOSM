@@ -8,6 +8,7 @@ import { getLaserDamage } from '../gameplay/WeaponSystem';
 import { MiningSystem } from '../gameplay/MiningSystem';
 import { gameState } from '../ui/store/gameStore';
 import { NebulaSystem } from '../rendering/NebulaSystem';
+import { WarpEffect } from '../rendering/WarpEffect';
 
 /**
  * Scene manager — all game objects, lifecycle.
@@ -23,6 +24,8 @@ export class SceneManager {
   private station: SpaceStation | null = null;
   public mining: MiningSystem | null = null;
   private nebulaSystem: NebulaSystem | null = null;
+  private warpEffect: WarpEffect | null = null;
+  public isWarping = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -46,7 +49,7 @@ export class SceneManager {
 
   spawnAsteroids(count: number = 12): void {
     if (!this.mining) this.mining = new MiningSystem(this.scene);
-    this.mining.spawn(count, new THREE.Vector3(0, 0, 0), 800);
+    this.mining.spawn(count, new THREE.Vector3(0, 0, 0), 300000);
   }
 
   createStation(pos: THREE.Vector3): SpaceStation {
@@ -58,7 +61,7 @@ export class SceneManager {
   spawnEnemies(count: number = 3): void {
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
-      const dist = 80 + Math.random() * 120;
+      const dist = 50000 + Math.random() * 150000;
       const pos = new THREE.Vector3(
         Math.cos(angle) * dist,
         (Math.random() - 0.5) * 200,
@@ -118,6 +121,14 @@ export class SceneManager {
       }
     }
 
+    // Update warp effect
+    if (this.warpEffect) {
+      if (this.playerShip) this.playerShip.updateMeshOnly(dt);
+      this.warpEffect.setAtCamera();
+      this.warpEffect.update(dt);
+      return;
+    }
+
     // Check player → enemy hits
     this.checkHits();
     // Check enemy → player hits
@@ -138,6 +149,7 @@ export class SceneManager {
         if (dist < 2.5) {
           enemy.takeDamage(getLaserDamage());
           gameState.lastHitTime = Date.now();
+          (window as any).__kosmLastHit = Date.now();
           // Remove bolt
           const b = bolts[bi];
           this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
@@ -180,6 +192,7 @@ export class SceneManager {
             gameState.updatePlayer({ hull: Math.max(0, p.hull - dmg) });
           }
           gameState.lastDamageTime = Date.now();
+          (window as any).__kosmLastDmg = Date.now();
           this.playerShip?.addShake(0.5);
         }
       }
@@ -188,7 +201,7 @@ export class SceneManager {
 
   mineAsteroid(playerPos: THREE.Vector3, dt: number): { destroyed: boolean; ore?: number; type?: string } {
     if (!this.mining) return { destroyed: false };
-    const a = this.mining.findNearest(playerPos, 80);
+    const a = this.mining.findNearest(playerPos, 200);
     if (!a) return { destroyed: false };
     a.health -= 30 * dt;
     (a.mesh.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x440000);
@@ -203,6 +216,44 @@ export class SceneManager {
       return { destroyed: true, ore, type };
     }
     return { destroyed: false };
+  }
+
+  /** Switch system, place ship far away, fly in during warp */
+  startWarp(targetSeed: number, playerShip: ShipController): void {
+    if (this.warpEffect || this.isWarping) return;
+    this.isWarping = true;
+    playerShip.flightModel.setThrottle(0);
+    // Switch immediately
+    this.switchSystem(targetSeed, playerShip);
+    // Place ship 200000 units further out
+    const pos = playerShip.flightModel.state.position;
+    const targetPos = pos.clone();
+    pos.z += 200000;
+    playerShip.flightModel.reset(pos);
+    const startPos = pos.clone();
+    const warpDuration = 5.0;
+    // Play warp effect (camera-attached)
+    const warpCam = this.playerShip?.camera;
+    this.warpEffect = new WarpEffect(this.scene, warpCam || new THREE.PerspectiveCamera(), warpDuration, () => {
+      this.warpEffect = null;
+      this.isWarping = false;
+      playerShip.resetWarpGlow();
+    });
+    this.warpEffect.setAtCamera();
+    // Fly-in animation
+    let warpAge = 0;
+    const flyIn = (dt: number) => {
+      warpAge += dt;
+      const t = Math.min(1, warpAge / warpDuration);
+      const eased = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+      const newPos = new THREE.Vector3().lerpVectors(startPos, targetPos, eased);
+      playerShip.flightModel.state.position.copy(newPos);
+    };
+    const origUpd = this.warpEffect.update.bind(this.warpEffect);
+    this.warpEffect.update = function(dt: number) {
+      flyIn(dt);
+      origUpd(dt);
+    };
   }
 
   /** Jump to a new system — destroy old, create new */
@@ -230,6 +281,6 @@ export class SceneManager {
     this.spawnAsteroids(15);
 
     // Reset player position
-    playerShip.flightModel.reset(new THREE.Vector3(0, 100, 300));
+    playerShip.flightModel.reset(new THREE.Vector3(600, 250, -800));
   }
 }

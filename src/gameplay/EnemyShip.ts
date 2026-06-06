@@ -15,6 +15,9 @@ export class EnemyShip {
   public aiState: 'patrol' | 'chase' | 'attack' | 'evade' = 'patrol';
   public aiTimer = 0;
   public patrolTarget = new THREE.Vector3();
+  private aiPersonality: 'aggressive' | 'balanced' | 'cautious' = 'balanced';
+  private dodgeTimer = 0;
+  private dodgeDir = 0;
 
   // Weapon
   private fireCooldown = 0;
@@ -56,6 +59,8 @@ export class EnemyShip {
       (Math.random() - 0.5) * 400,
       (Math.random() - 0.5) * 1000
     );
+    const personalities: Array<'aggressive' | 'balanced' | 'cautious'> = ['aggressive', 'balanced', 'cautious'];
+    this.aiPersonality = personalities[Math.floor(Math.random() * 3)];
   }
 
   private createMesh(): THREE.Group {
@@ -93,13 +98,21 @@ export class EnemyShip {
     this.particleTex = tex;
   }
 
-  /** Shoot a laser bolt towards target */
-  shootAt(target: THREE.Vector3): void {
+  /** Shoot a laser bolt towards target with lead prediction */
+  shootAt(target: THREE.Vector3, targetVel?: THREE.Vector3): void {
     if (this.fireCooldown > 0) return;
     this.fireCooldown = this.fireRate;
 
+    let aimPoint = target.clone();
+    // Simple lead: predict where target will be
+    if (targetVel) {
+      const dist = this.flightModel.state.position.distanceTo(target);
+      const travelTime = dist / 250; // bolt speed
+      aimPoint.add(targetVel.clone().multiplyScalar(travelTime * 0.7));
+    }
+
     const pos = this.flightModel.state.position.clone();
-    const dir = target.clone().sub(pos).normalize();
+    const dir = aimPoint.clone().sub(pos).normalize();
     const offset = new THREE.Vector3(0.3, 0, 0.5).applyQuaternion(this.flightModel.state.orientation);
     const spawnPos = pos.clone().add(offset);
 
@@ -143,7 +156,12 @@ export class EnemyShip {
     });
   }
 
+  private lastPlayerPos = new THREE.Vector3();
+  private playerVelocity = new THREE.Vector3();
+
   update(dt: number, playerPos: THREE.Vector3): void {
+    this.playerVelocity.copy(playerPos).sub(this.lastPlayerPos).divideScalar(Math.max(dt, 0.001));
+    this.lastPlayerPos.copy(playerPos);
     const myPos = this.flightModel.state.position;
     const dist = myPos.distanceTo(playerPos);
     const toPlayer = playerPos.clone().sub(myPos).normalize();
@@ -152,45 +170,50 @@ export class EnemyShip {
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.flightModel.state.orientation);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.flightModel.state.orientation);
 
-    // AI state
+    const atkRng = this.aiPersonality === 'aggressive' ? 350 : this.aiPersonality === 'cautious' ? 120 : 200;
+    const chsRng = this.aiPersonality === 'aggressive' ? 2500 : this.aiPersonality === 'cautious' ? 1000 : 1500;
+
     this.aiTimer -= dt;
-    if (dist < 60) {
-      this.aiState = 'attack';
-    } else if (dist < 250) {
-      this.aiState = 'chase';
-    } else if (this.aiTimer <= 0) {
+    if (dist < atkRng) this.aiState = 'attack';
+    else if (dist < chsRng) this.aiState = 'chase';
+    else if (this.aiTimer <= 0) {
       this.aiState = 'patrol';
       this.aiTimer = 4 + Math.random() * 6;
       this.patrolTarget.set(
-        myPos.x + (Math.random() - 0.5) * 500,
-        myPos.y + (Math.random() - 0.5) * 200,
-        myPos.z + (Math.random() - 0.5) * 500
-      );
+        myPos.x + (Math.random() - 0.5) * 3000,
+        myPos.y + (Math.random() - 0.5) * 1000,
+        myPos.z + (Math.random() - 0.5) * 3000);
     }
 
-    // Movement
+    this.dodgeTimer -= dt;
+    if (this.health < 60 && this.dodgeTimer <= 0 && this.aiState === 'attack') {
+      this.dodgeTimer = 0.8 + Math.random() * 1.5;
+      this.dodgeDir = (Math.random() > 0.5 ? 1 : -1);
+    }
+
     if (this.aiState === 'patrol') {
       this.flightModel.setThrottle(0.2);
-      // Steer toward patrol point
-      const toPatrol = this.patrolTarget.clone().sub(myPos).normalize();
-      this.steerToward(toPatrol, up, right, 2.0);
+      this.steerToward(this.patrolTarget.clone().sub(myPos).normalize(), up, right, 2.0);
     } else if (this.aiState === 'chase') {
-      this.flightModel.setThrottle(0.6);
+      this.flightModel.setThrottle(this.aiPersonality === 'aggressive' ? 0.8 : 0.5);
       this.steerToward(toPlayer, up, right, 3.0);
     } else if (this.aiState === 'attack') {
-      this.flightModel.setThrottle(0.5);
-      this.steerToward(toPlayer, up, right, 4.0);
-      // Shoot when facing player
-      if (dot > 0.6) this.shootAt(playerPos);
+      this.flightModel.setThrottle(this.aiPersonality === 'cautious' ? 0.4 : 0.5);
+      let aim = toPlayer.clone();
+      if (this.dodgeTimer > 0) aim.add(right.clone().multiplyScalar(this.dodgeDir * 0.5)).normalize();
+      this.steerToward(aim, up, right, 4.0);
+      if (dot > 0.5) this.shootAt(playerPos, this.playerVelocity);
     }
 
-    // Evade if health low
-    if (this.health < 40 && this.aiState === 'attack') {
-      this.flightModel.setThrottle(0.8);
-      // Steer slightly away from player
+    if (this.aiPersonality === 'cautious' && dist < 80) {
+      this.flightModel.setThrottle(0.7);
+      this.steerToward(toPlayer.clone().multiplyScalar(-1), up, right, 3.0);
+    }
+
+    if (this.health < 30 && this.aiState === 'attack') {
+      this.flightModel.setThrottle(1.0);
       const evade = toPlayer.clone().multiplyScalar(-1);
-      evade.x += (Math.random() - 0.5) * 2;
-      evade.y += (Math.random() - 0.5) * 2;
+      evade.x += (Math.random() - 0.5) * 2; evade.y += (Math.random() - 0.5) * 2;
       evade.normalize();
       this.steerToward(evade, up, right, 3.0);
     }
