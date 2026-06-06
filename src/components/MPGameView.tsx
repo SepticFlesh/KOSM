@@ -5,6 +5,7 @@ import { initSharedGame, type GameContext } from '../game/bootstrap';
 import { attachMultiplayer, startMPHUDSync, type MPContext } from '../modes/MultiplayerMode';
 import { WSClient } from '../network/wsClient';
 import { ChatPanel } from './ChatPanel';
+import { PlayerList, type PlayerInfo } from './PlayerList';
 import { soundManager } from '../audio/SoundManager';
 import { loadGame } from '../utils/saveLoad';
 import { gameState } from '../ui/store/gameStore';
@@ -29,6 +30,7 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
   const [authState, setAuthState] = useState<'connecting' | 'authenticated' | 'error'>('connecting');
   const [authError, setAuthError] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ playerName: string; text: string; timestamp: number }>>([]);
+  const [playerList, setPlayerList] = useState<PlayerInfo[]>([]);
   const wsRef = useRef<WSClient | null>(null);
   const mobileLockedRef = useRef({ locked: false });
   const playerIdRef = useRef('');
@@ -117,6 +119,19 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
         }
         if (msg.type === 'missions') {
           gameState.setMissions(msg.payload.missions);
+        }
+        if (msg.type === 'world_snapshot') {
+          const myId = playerIdRef.current;
+          const list: PlayerInfo[] = msg.payload.entities
+            .filter((e: any) => e.ownerId && e.ownerId !== myId)
+            .map((e: any) => ({
+              id: e.id,
+              name: `Player_${e.id.slice(0, 4)}`,
+              distance: 0,
+              health: e.health,
+              shield: e.shield,
+            }));
+          setPlayerList(list);
         }
       });
 
@@ -280,6 +295,7 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
           {mobile ? 'TAP TO FLY' : 'CLICK TO FLY'}
         </div>
       )}
+      <PlayerList players={playerList} visible={authState === 'authenticated'} />
       <ChatPanel
         messages={chatMessages}
         onSend={(text) => wsRef.current?.send({ type: 'chat_message', payload: { text } })}
