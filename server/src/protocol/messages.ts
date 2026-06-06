@@ -158,7 +158,7 @@ export interface TradeGood {
 
 export interface MissionDef {
   id: number;
-  type: string;
+  type: 'destroy' | 'deliver';
   title: string;
   description: string;
   reward: number;

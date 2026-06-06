@@ -4,11 +4,13 @@
  * Fluctuations every 5 minutes.
  */
 
-interface MarketEntry {
+export interface MarketEntry {
+  id: string;
   goodId: string;
   name: string;
   basePrice: number;
   price: number;
+  playerQty: number;
   stationQty: number;
 }
 
@@ -81,7 +83,7 @@ export class EconomySystem {
     // Merge with player cargo quantities
     const merged = goods.map(g => {
       const pc = playerCargo.find(c => c.goodId === g.goodId);
-      return { ...g, playerQty: pc?.quantity || 0 };
+      return { ...g, playerQty: pc?.quantity || 0, id: g.goodId };
     });
     return { goods: merged };
   }
@@ -96,10 +98,12 @@ export class EconomySystem {
       mod *= 0.85 + rng() * 0.3; // ±15% random
       const price = Math.round(g.basePrice * mod);
       return {
+        id: g.id,
         goodId: g.id,
         name: g.name,
         basePrice: g.basePrice,
         price: Math.max(1, price),
+        playerQty: 0,
         stationQty: 5 + Math.floor(rng() * 20),
       };
     });

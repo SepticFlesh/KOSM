@@ -5,7 +5,7 @@ import { verifyToken, generateToken } from './auth.js';
 import { findOrCreatePlayer } from './db.js';
 import type { ClientMessage, ServerMessage, AuthOkMessage } from './protocol/messages.js';
 
-interface PlayerSession {
+export interface PlayerSession {
   ws: WebSocket;
   playerId: string;
   username: string;

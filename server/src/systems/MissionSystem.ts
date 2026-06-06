@@ -3,16 +3,9 @@
  * Generates destroy/deliver missions per player.
  */
 
-export interface Mission {
-  id: number;
-  type: 'destroy' | 'deliver';
-  title: string;
-  description: string;
-  reward: number;
-  progress: number;
-  target: number;
-  completed: boolean;
-}
+import type { MissionDef } from '../protocol/messages.js';
+
+export type Mission = MissionDef;
 
 const DESTROY_TEMPLATES = [
   { title: 'Угроза пиратов', desc: 'Уничтожьте пиратов в системе.', target: 2, reward: 500 },
