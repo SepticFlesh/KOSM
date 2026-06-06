@@ -4,6 +4,7 @@ import type { Engine } from '../engine/Engine';
 import { initSharedGame, type GameContext } from '../game/bootstrap';
 import { attachMultiplayer, startMPHUDSync, type MPContext } from '../modes/MultiplayerMode';
 import { WSClient } from '../network/wsClient';
+import { ChatPanel } from './ChatPanel';
 import { soundManager } from '../audio/SoundManager';
 import { loadGame } from '../utils/saveLoad';
 import { gameState } from '../ui/store/gameStore';
@@ -27,6 +28,8 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
   const [pointerLocked, setPointerLocked] = useState(false);
   const [authState, setAuthState] = useState<'connecting' | 'authenticated' | 'error'>('connecting');
   const [authError, setAuthError] = useState('');
+  const [chatMessages, setChatMessages] = useState<Array<{ playerName: string; text: string; timestamp: number }>>([]);
+  const wsRef = useRef<WSClient | null>(null);
   const mobileLockedRef = useRef({ locked: false });
   const playerIdRef = useRef('');
 
@@ -100,7 +103,22 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
 
       // Connect WebSocket
       wsClient = new WSClient();
+      wsRef.current = wsClient;
       wsClient.connect(WS_URL, token);
+
+      // Handle chat + trade messages
+      wsClient.onMessage((msg) => {
+        if (msg.type === 'chat_broadcast') {
+          setChatMessages(prev => [...prev.slice(-99), msg.payload]);
+        }
+        if (msg.type === 'trade_menu') {
+          gameState.openTrade(msg.payload.goods);
+          gameState.playerCredits = msg.payload.credits;
+        }
+        if (msg.type === 'missions') {
+          gameState.setMissions(msg.payload.missions);
+        }
+      });
 
       // Wait for auth_ok
       await new Promise<void>((resolve, reject) => {
@@ -262,6 +280,11 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
           {mobile ? 'TAP TO FLY' : 'CLICK TO FLY'}
         </div>
       )}
+      <ChatPanel
+        messages={chatMessages}
+        onSend={(text) => wsRef.current?.send({ type: 'chat_message', payload: { text } })}
+        visible={authState === 'authenticated'}
+      />
     </>
   );
 }

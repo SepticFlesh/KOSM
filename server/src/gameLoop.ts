@@ -29,9 +29,19 @@ export class GameLoop {
   private tick = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private broadcastFn: ((msg: ServerMessage) => void) | null = null;
+  private onKillFn: ((playerId: string, killCount: number) => void) | null = null;
+  private onTradeFn: ((playerId: string) => void) | null = null;
 
-  setBroadcast(fn: (msg: ServerMessage) => void): void {
-    this.broadcastFn = fn;
+  setBroadcast(fn: (msg: ServerMessage) => void): void { this.broadcastFn = fn; }
+  onKill(fn: (playerId: string, killCount: number) => void): void { this.onKillFn = fn; }
+  onTradeRequest(fn: (playerId: string) => void): void { this.onTradeFn = fn; }
+
+  getPlayerSystem(playerId: string): number {
+    return this.players.get(playerId)?.currentSystem || 0;
+  }
+
+  playerCount(): number {
+    return this.players.size;
   }
 
   addPlayer(session: PlayerSession): void {
@@ -210,31 +220,47 @@ export class GameLoop {
       npc.ship.simulate(TICK_DT);
     }
 
-    // 4. Combat check (simplified: distance-based)
+    // 4. Combat check
+    const killsByPlayer = new Map<string, number>();
     for (const [, player] of this.players) {
       for (const [, npc] of this.npcs) {
-        if (npc.systemSeed === player.currentSystem) {
-          const dist = player.ship.state.position.distanceTo(npc.ship.state.position);
-          if (dist < 3) {
-            // Player hit NPC
-            npc.ship.state.health -= 25 * TICK_DT;
-            if (npc.ship.state.health <= 0) {
-              // Respawn NPC
-              npc.ship.reset(new Vector3(
-                600 + (Math.random() - 0.5) * 500,
-                250 + (Math.random() - 0.5) * 200,
-                -800 + (Math.random() - 0.5) * 500,
-              ));
-              // Grant kill reward
-              if (this.broadcastFn) {
-                this.broadcastFn({
-                  type: 'combat_event',
-                  payload: { damage: 25, sourceId: player.session.playerId, targetId: npc.id },
-                });
-              }
-            }
+        if (npc.systemSeed !== player.currentSystem) continue;
+        const dist = player.ship.state.position.distanceTo(npc.ship.state.position);
+
+        // Player weapon hit NPC (distance-based, simulates laser bolts)
+        if (dist < 3 && player.ship.inputFire) {
+          npc.ship.state.health -= 25 * TICK_DT;
+        }
+
+        // NPC weapon hit player (if NPC is attacking and in range)
+        if (dist < 200 && npc.aiState === 'attack' && Math.random() < 0.1 * TICK_DT * 20) {
+          if (player.ship.state.shield > 0) {
+            player.ship.state.shield = Math.max(0, player.ship.state.shield - 5 * TICK_DT);
+          } else {
+            player.ship.state.health = Math.max(0, player.ship.state.health - 3 * TICK_DT);
           }
         }
+
+        // NPC killed
+        if (npc.ship.state.health <= 0) {
+          npc.ship.reset(new Vector3(
+            600 + (Math.random() - 0.5) * 500,
+            250 + (Math.random() - 0.5) * 200,
+            -800 + (Math.random() - 0.5) * 500,
+          ));
+          killsByPlayer.set(player.session.playerId, (killsByPlayer.get(player.session.playerId) || 0) + 1);
+        }
+      }
+    }
+
+    // Notify kills
+    for (const [playerId, count] of killsByPlayer) {
+      if (this.onKillFn) this.onKillFn(playerId, count);
+      if (this.broadcastFn) {
+        this.broadcastFn({
+          type: 'combat_event',
+          payload: { damage: 25, sourceId: playerId, targetId: 'npc' },
+        });
       }
     }
 
