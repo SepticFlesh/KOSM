@@ -51,8 +51,8 @@ if [ "${1:-}" = "--server" ]; then
     pkill -f "node dist" 2>/dev/null || true
     sleep 0.5
 
-    # Start new process
-    nohup node dist/server/src/index.js > server.log 2>&1 &
+    # Start new process (with .env loading)
+    nohup node --env-file=.env dist/server/src/index.js > server.log 2>&1 &
     echo "Server restarted, PID: $!"
     sleep 1
     cat server.log | tail -3
