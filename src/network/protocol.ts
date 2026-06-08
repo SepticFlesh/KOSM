@@ -2,47 +2,21 @@
 // Client network protocol — mirrors server/src/protocol/messages.ts
 // ============================================================
 
-// --- Shared types ---
-export interface Vec3 { x: number; y: number; z: number; }
-export interface Quat { x: number; y: number; z: number; w: number; }
+import type {
+  Vec3, Quat,
+  InputPayload, EntitySnapshot, WorldSnapshot,
+} from '@shared/types';
 
-export interface InputPayload {
-  tick: number;
-  throttle: number;
-  boost: boolean;
-  fire: boolean;
-  mine: boolean;
-  torque: Vec3;
-  thrust: Vec3;
-  mode: string;
-  orientation: Quat;
-}
-
-export interface EntitySnapshot {
-  id: string;
-  position: Vec3;
-  orientation: Quat;
-  velocity: Vec3;
-  health: number;
-  shield: number;
-  ownerId?: string;
-  npcType?: string;
-}
-
-export interface WorldSnapshot {
-  tick: number;
-  timestamp: number;
-  systemSeed: number;
-  entities: EntitySnapshot[];
-  station?: { id: string; position: Vec3 };
-}
+export type { Vec3, Quat, InputPayload, EntitySnapshot, WorldSnapshot };
 
 // --- Client → Server messages ---
 export type ClientMessage =
   | { type: 'auth'; payload: { token: string } }
   | { type: 'input'; payload: InputPayload }
+  | { type: 'fire_bolt'; payload: { pos: Vec3; dir: Vec3 } }
   | { type: 'trade_buy'; payload: { goodId: string; quantity: number } }
   | { type: 'trade_sell'; payload: { goodId: string; quantity: number } }
+  | { type: 'trade_request'; payload: Record<string, never> }
   | { type: 'mission_accept'; payload: { missionId: number } }
   | { type: 'jump_request'; payload: { targetSystem: number } }
   | { type: 'chat_message'; payload: { text: string } };

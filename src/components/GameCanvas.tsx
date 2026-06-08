@@ -7,6 +7,7 @@ import { attachSinglePlayer, startSPHUDSync } from '../modes/SinglePlayerMode';
 import { soundManager } from '../audio/SoundManager';
 import { loadGame } from '../utils/saveLoad';
 import { gameState } from '../ui/store/gameStore';
+import { SystemMapOverlay } from './SystemMapOverlay';
 
 /**
  * GameCanvas — Single Player mode.
@@ -203,6 +204,7 @@ export function GameCanvas({ mobile }: { mobile?: boolean }) {
           <div style={{ position: 'absolute', bottom: 0, right: 0, width: '25%', height: '25%', background: 'rgba(255,170,0,0.06)', zIndex: 14, pointerEvents: 'none' }} />
         </>
       )}
+      <SystemMapOverlay visible={true} />
       {!pointerLocked && (
         <div
           onClick={handleClick}

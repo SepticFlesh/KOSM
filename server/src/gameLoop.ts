@@ -1,5 +1,6 @@
 import { Vector3, Quaternion } from 'three';
 import { ShipEntity, DEFAULT_CONFIG } from './entities/ShipEntity.js';
+import { TrafficSystem } from './systems/TrafficSystem.js';
 import type { PlayerSession } from './wsServer.js';
 import type { WorldSnapshot, EntitySnapshot, InputPayload, ServerMessage } from './protocol/messages.js';
 
@@ -26,6 +27,7 @@ interface NPCEntry {
 export class GameLoop {
   private players = new Map<string, PlayerEntry>();
   private npcs = new Map<string, NPCEntry>();
+  public traffic = new TrafficSystem();
   private tick = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private broadcastFn: ((msg: ServerMessage) => void) | null = null;
@@ -46,7 +48,8 @@ export class GameLoop {
 
   addPlayer(session: PlayerSession): void {
     const ship = new ShipEntity(DEFAULT_CONFIG);
-    ship.reset(new Vector3(600, 250, -800));
+    ship.playerControlled = true; // rotation is client-authoritative
+    ship.reset(new Vector3(1600, 80, -400));
     this.players.set(session.playerId, {
       session,
       ship,
@@ -62,11 +65,62 @@ export class GameLoop {
     console.log(`[GameLoop] Player left: ${playerId}`);
   }
 
+  /** Ray-vs-sphere hit test for bolt-based combat */
+  handleFireBolt(session: PlayerSession, payload: { pos: {x:number;y:number;z:number}; dir: {x:number;y:number;z:number} }): void {
+    const entry = this.players.get(session.playerId);
+    if (!entry) return;
+    const origin = new Vector3(payload.pos.x, payload.pos.y, payload.pos.z);
+    const dir = new Vector3(payload.dir.x, payload.dir.y, payload.dir.z).normalize();
+    const BOLT_RANGE = 1000;
+    const HIT_RADIUS = 5;
+
+    let bestDist = Infinity;
+    let bestNpc: NPCEntry | null = null;
+
+    for (const [, npc] of this.npcs) {
+      if (npc.systemSeed !== entry.currentSystem) continue;
+      if ((npc as any)._dead) continue;
+      const npcPos = npc.ship.state.position;
+      // Ray-sphere intersection
+      const toNpc = npcPos.clone().sub(origin);
+      const tca = toNpc.dot(dir);
+      if (tca < 0 || tca > BOLT_RANGE) continue; // behind or beyond range
+      const d2 = toNpc.dot(toNpc) - tca * tca;
+      if (d2 > HIT_RADIUS * HIT_RADIUS) continue; // miss
+      if (tca < bestDist) { bestDist = tca; bestNpc = npc; }
+    }
+
+    if (bestNpc) {
+      bestNpc.ship.state.health -= 10;
+      if (bestNpc.ship.state.health <= 0 && !(bestNpc as any)._dead) {
+        (bestNpc as any)._dead = true;
+        bestNpc.ship.state.health = 0;
+        // Hide after 500ms (client sees death + explosion)
+        const deadPos = bestNpc.ship.state.position.clone();
+        setTimeout(() => { bestNpc!.ship.state.position.set(0, -99999, 0); }, 500);
+        // Respawn after 5 seconds
+        setTimeout(() => {
+          bestNpc!.ship.reset(new Vector3(
+            600 + (Math.random() - 0.5) * 500,
+            250 + (Math.random() - 0.5) * 200,
+            -800 + (Math.random() - 0.5) * 500,
+          ));
+          (bestNpc as any)._dead = false;
+        }, 3000);
+        if (this.onKillFn) this.onKillFn(session.playerId, 1);
+      }
+    }
+  }
+
   handleInput(session: PlayerSession, payload: InputPayload): void {
     const entry = this.players.get(session.playerId);
     if (!entry) return;
+    // Apply fire immediately (don't let regular inputs overwrite it)
+    if (payload.fire) {
+      entry.ship.inputFire = true;
+      setTimeout(() => { entry.ship.inputFire = false; }, 200);
+    }
     entry.inputBuffer.push(payload);
-    // Keep only last 5 inputs
     if (entry.inputBuffer.length > 5) entry.inputBuffer.shift();
   }
 
@@ -120,12 +174,14 @@ export class GameLoop {
 
   start(): void {
     this.initNPCs();
+    this.traffic.init(0);
     this.timer = setInterval(() => this.tickLoop(), TICK_DT * 1000);
-    console.log(`[GameLoop] Started at ${TICK_RATE}Hz`);
+    console.log(`[GameLoop] Started at ${TICK_RATE}Hz, ${this.traffic.ships.length} civilian ships`);
   }
 
   stop(): void {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.traffic.dispose();
   }
 
   private tickLoop(): void {
@@ -140,7 +196,15 @@ export class GameLoop {
         entry.ship.applyInput(
           input.throttle,
           input.boost,
-          new Vector3(input.torque.x, input.torque.y, input.torque.z),
+          new Vector3(0, 0, 0),
+          input.mode,
+          input.fire,
+        );
+        entry.ship.clientOrientation.set(
+          input.orientation.x,
+          input.orientation.y,
+          input.orientation.z,
+          input.orientation.w,
         );
         entry.inputBuffer.length = 0;
       }
@@ -151,7 +215,12 @@ export class GameLoop {
       entry.ship.simulate(TICK_DT);
     }
 
-    // 3. NPC AI (simplified)
+    // 3. Traffic (civilian ships) — pass player positions for LOD
+    const pirates = [...this.npcs.entries()].map(([id, npc]) => ({ id, ship: npc.ship, aiState: npc.aiState }));
+    const playerPositions = [...this.players.values()].map(e => e.ship.state.position);
+    this.traffic.update(TICK_DT, pirates, playerPositions);
+
+    // 4. NPC AI (simplified)
     for (const [, npc] of this.npcs) {
       // Find nearest player in same system
       let nearestPlayer: PlayerEntry | null = null;
@@ -227,11 +296,6 @@ export class GameLoop {
         if (npc.systemSeed !== player.currentSystem) continue;
         const dist = player.ship.state.position.distanceTo(npc.ship.state.position);
 
-        // Player weapon hit NPC (distance-based, simulates laser bolts)
-        if (dist < 3 && player.ship.inputFire) {
-          npc.ship.state.health -= 25 * TICK_DT;
-        }
-
         // NPC weapon hit player (if NPC is attacking and in range)
         if (dist < 200 && npc.aiState === 'attack' && Math.random() < 0.1 * TICK_DT * 20) {
           if (player.ship.state.shield > 0) {
@@ -239,16 +303,6 @@ export class GameLoop {
           } else {
             player.ship.state.health = Math.max(0, player.ship.state.health - 3 * TICK_DT);
           }
-        }
-
-        // NPC killed
-        if (npc.ship.state.health <= 0) {
-          npc.ship.reset(new Vector3(
-            600 + (Math.random() - 0.5) * 500,
-            250 + (Math.random() - 0.5) * 200,
-            -800 + (Math.random() - 0.5) * 500,
-          ));
-          killsByPlayer.set(player.session.playerId, (killsByPlayer.get(player.session.playerId) || 0) + 1);
         }
       }
     }
@@ -264,11 +318,27 @@ export class GameLoop {
       }
     }
 
-    // 5. Broadcast world snapshot
-    if (this.tick % 2 === 0 && this.broadcastFn) { // every 2 ticks = 10Hz snapshots
+    // 5. Broadcast world snapshot (every 2 ticks = 10Hz)
+    if (this.tick % 2 === 0 && this.broadcastFn) {
       const entities: EntitySnapshot[] = [];
 
-      // Players
+      // Collect player positions for distance culling
+      const playerPositions: Vector3[] = [];
+      for (const [, entry] of this.players) {
+        playerPositions.push(entry.ship.state.position);
+      }
+      const hasPlayers = playerPositions.length > 0;
+
+      // Helper: check if position is near any player
+      const TRAFFIC_CULL_RANGE = 50000;
+      const isNearPlayer = (pos: Vector3): boolean => {
+        for (const pp of playerPositions) {
+          if (pos.distanceToSquared(pp) < TRAFFIC_CULL_RANGE * TRAFFIC_CULL_RANGE) return true;
+        }
+        return false;
+      };
+
+      // Players (always included)
       for (const [id, entry] of this.players) {
         const s = entry.ship.state;
         entities.push({
@@ -282,8 +352,36 @@ export class GameLoop {
         });
       }
 
-      // NPCs
+      // Planet bases (always included — small count)
+      for (const b of this.traffic.getBases()) {
+        entities.push({
+          id: b.id,
+          position: { x: b.pos.x, y: b.pos.y, z: b.pos.z },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+          velocity: { x: 0, y: 0, z: 0 },
+          health: 1, shield: 1,
+          npcType: 'base',
+        });
+      }
+
+      // Civilian traffic — only near players
+      for (const cs of this.traffic.ships) {
+        if (hasPlayers && !isNearPlayer(cs.ship.state.position)) continue;
+        const s = cs.ship.state;
+        entities.push({
+          id: cs.id,
+          position: { x: s.position.x, y: s.position.y, z: s.position.z },
+          orientation: { x: s.orientation.x, y: s.orientation.y, z: s.orientation.z, w: s.orientation.w },
+          velocity: { x: s.velocity.x, y: s.velocity.y, z: s.velocity.z },
+          health: s.health,
+          shield: 0,
+          npcType: cs.shipType.role,
+        });
+      }
+
+      // NPCs — skip dead ones
       for (const [id, npc] of this.npcs) {
+        if ((npc as any)._dead) continue;
         const s = npc.ship.state;
         entities.push({
           id,
@@ -302,6 +400,7 @@ export class GameLoop {
         systemSeed: 0,
         entities,
         station: { id: 'station_0', position: { x: 600, y: 50, z: -400 } },
+        routes: this.traffic.getRoutesData(),
       };
 
       this.broadcastFn({ type: 'world_snapshot', payload: snapshot });

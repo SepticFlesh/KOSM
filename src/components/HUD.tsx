@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-function RadarCanvas() {
+function RadarCanvas({ nav }: { nav?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let running = true;
@@ -8,8 +8,8 @@ function RadarCanvas() {
       if (!running) return;
       const canvas = canvasRef.current;
       if (!canvas) { requestAnimationFrame(draw); return; }
-      const blips = (window as any).__kosmRadarBlips || [];
-      const size = 150, dpr = 2;
+      const blips = nav ? ((window as any).__kosmNavBlips || []) : ((window as any).__kosmRadarBlips || []);
+      const size = nav ? 240 : 150, dpr = 2;
       canvas.width = size * dpr; canvas.height = size * dpr;
       canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
       const ctx = canvas.getContext('2d')!;
@@ -25,18 +25,56 @@ function RadarCanvas() {
       ctx.strokeStyle = 'rgba(68,170,255,0.3)'; ctx.lineWidth = 0.5;
       ctx.beginPath(); ctx.moveTo(cx-maxR,cy); ctx.lineTo(cx+maxR,cy); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx,cy-maxR); ctx.lineTo(cx,cy+maxR); ctx.stroke();
+
+      // Navigator route lines
+      if (nav) {
+        const routes = (window as any).__kosmNavRoutes || [];
+        for (const r of routes) {
+          ctx.strokeStyle = r.color; ctx.lineWidth = 0.3;
+          ctx.beginPath();
+          ctx.moveTo(cx + r.x1 * maxR * 0.9, cy - r.y1 * maxR * 0.7);
+          ctx.lineTo(cx + r.x2 * maxR * 0.9, cy - r.y2 * maxR * 0.7);
+          ctx.stroke();
+        }
+      }
+
       for (const b of blips) {
         const bx = cx + b.x * maxR * 0.9, by = cy - b.y * maxR * 0.7;
         const stem = (b.height||0) * maxR * 0.4, sy = by + stem;
         const isSt = b.type === 'station';
-        const cr = isSt ? 100 : Math.round(200*b.health+55);
-        const cg = isSt ? 180 : Math.round(40*b.health);
-        const cb = isSt ? 255 : 0;
-        ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.5)`; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, sy); ctx.stroke();
-        ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-        if (isSt) { ctx.beginPath(); ctx.moveTo(bx,by-4); ctx.lineTo(bx+4,by); ctx.lineTo(bx,by+4); ctx.lineTo(bx-4,by); ctx.closePath(); ctx.fill(); }
-        else ctx.fillRect(bx-2.5, by-2.5, 5, 5);
+        const isPlayer = b.type === 'player';
+        const isStar = (b as any).type === 'star';
+        const isPlanet = (b as any).type === 'planet';
+        const isOrbit = (b as any).type === 'orbit';
+        if (nav) {
+          if (isStar || isPlanet) {
+            const worldR = (b as any).r || 1000;
+            const pr = Math.max(1.5, Math.min(15, worldR / 200000 * maxR));
+            ctx.strokeStyle = isStar ? 'rgba(255,170,68,0.5)' : 'rgba(100,170,255,0.4)';
+            ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.arc(bx, by, pr, 0, Math.PI*2); ctx.stroke();
+          } else if (isOrbit) {
+            const worldOr = (b as any).r || 0;
+            const or = Math.min(maxR * 0.9, worldOr / 200000 * maxR);
+            if (or > 0.5) {
+              ctx.strokeStyle = 'rgba(68,170,255,0.06)'; ctx.lineWidth = 0.3;
+              ctx.beginPath(); ctx.arc(bx, by, or, 0, Math.PI*2); ctx.stroke();
+            }
+          } else {
+            ctx.fillStyle = isSt ? '#4f4' : isPlayer ? '#48f' : '#fa0';
+            ctx.fillRect(bx - 0.5, by - 0.5, 1, 1);
+          }
+        } else {
+          const cr = isSt ? 100 : isPlayer ? 68 : 255;
+          const cg = isSt ? 180 : isPlayer ? 136 : 40;
+          const cb = isSt ? 255 : isPlayer ? 255 : 0;
+          ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.7)`; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, sy); ctx.stroke();
+          ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+          if (isSt) { ctx.beginPath(); ctx.moveTo(bx,by-2.5); ctx.lineTo(bx+2.5,by); ctx.lineTo(bx,by+2.5); ctx.lineTo(bx-2.5,by); ctx.closePath(); ctx.fill(); }
+          else if (isPlayer) { ctx.beginPath(); ctx.arc(bx, by, 2, 0, Math.PI*2); ctx.fill(); }
+          else ctx.fillRect(bx-1.5, by-1.5, 3, 3);
+        }
       }
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI*2); ctx.fill();
       ctx.strokeStyle = 'rgba(68,170,255,0.4)'; ctx.lineWidth = 1;
@@ -104,6 +142,10 @@ export function HUD() {
       <div className="radar-container">
         <div className="radar-label">SCANNER</div>
         <RadarCanvas />
+      </div>
+      <div className="navigator-container">
+        <div className="radar-label">NAVIGATOR</div>
+        <RadarCanvas nav />
       </div>
 
       <div className="controls-hint">

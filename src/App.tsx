@@ -3,6 +3,7 @@ import { MainMenu } from './components/MainMenu';
 import { GameCanvas } from './components/GameCanvas';
 import { MPGameView } from './components/MPGameView';
 import { HUD } from './components/HUD';
+import { TargetMarkers } from './components/TargetMarkers';
 import { SidePanel } from './components/SidePanel';
 import './App.css';
 
@@ -50,6 +51,7 @@ function App() {
       <div style={{ width: mobile ? '100%' : undefined, flex: mobile ? undefined : 1, position: 'relative' }}>
         {isMP ? <MPGameView mobile={mobile} /> : <GameCanvas mobile={mobile} />}
         <HUD />
+        <TargetMarkers />
         {backButton}
         {mobile && (
           <button

@@ -1,69 +1,91 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { handleOAuthCallback } from './auth.js';
+import { createServer } from 'node:http';
+import { createRouter } from './http/router.js';
 import { createWSServer } from './wsServer.js';
 import { GameLoop } from './gameLoop.js';
 import { EconomySystem } from './systems/EconomySystem.js';
 import { ServerMissionSystem } from './systems/MissionSystem.js';
 import { ChatSystem } from './systems/ChatSystem.js';
-import { getPlayer, updatePlayerCredits, updatePlayerCargo, getPlayerCargo, getPlayerMissions, upsertPlayerCargo, upsertPlayerMission, changeReputation } from './db.js';
+import { getPlayerMissions, getPlayerCargo } from './db.js';
+import { createTradeHandler } from './handlers/tradeHandler.js';
+import { createMovementHandler } from './handlers/movementHandler.js';
+import { createCombatHandler } from './handlers/combatHandler.js';
+import { createChatHandler } from './handlers/chatHandler.js';
+import { createTradeRequestHandler } from './handlers/tradeRequestHandler.js';
 import type { ClientMessage, ServerMessage, InputPayload, MissionDef } from './protocol/messages.js';
+
+// ── Environment ─────────────────────────────────────────────────────
+function checkEnv(): void {
+  const required = ['JWT_SECRET'];
+  const missing = required.filter(k =>
+    !process.env[k] || process.env[k] === 'change-me-to-a-random-string-at-least-32-chars'
+  );
+  if (missing.length > 0) {
+    console.error(`[KOSM] FATAL: Missing required env: ${missing.join(', ')}`);
+    console.error('[KOSM] Copy server/.env.example to server/.env and fill in the values.');
+    process.exit(1);
+  }
+  const oauth = [];
+  if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) oauth.push('GitHub');
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) oauth.push('Google');
+  if (oauth.length) console.warn(`[KOSM] WARNING: ${oauth.join(', ')} OAuth not configured.`);
+  console.log('[KOSM] Environment check passed.');
+}
+checkEnv();
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+// ── Systems ─────────────────────────────────────────────────────────
 const gameLoop = new GameLoop();
 const economy = new EconomySystem();
 const missions = new ServerMissionSystem();
 const chat = new ChatSystem();
 
-// Per-player mission tracking
+// ── Per-player state ────────────────────────────────────────────────
 const playerMissions = new Map<string, MissionDef[]>();
-// Per-player kill tracking
 const playerKills = new Map<string, number>();
 
-const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-  const url = new URL(req.url || '/', `http://localhost:${PORT}`);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-
-  if (url.pathname === '/api/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', uptime: process.uptime(), players: gameLoop.playerCount() }));
-    return;
-  }
-
-  if (url.pathname === '/api/auth/github/callback') {
-    const code = url.searchParams.get('code');
-    if (!code) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing code' })); return; }
-    const result = await handleOAuthCallback(code);
-    if (!result) { res.writeHead(401, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'OAuth failed' })); return; }
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(`<!DOCTYPE html><html><body><script>
-      if (window.opener) {
-        window.opener.postMessage({ type: 'kosm_auth', token: '${result.token}', playerId: '${result.playerId}', username: '${result.username}' }, '*');
-        window.close();
-      } else {
-        document.body.textContent = 'Auth OK';
-      }
-    </script></body></html>`);
-    return;
-  }
-
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found' }));
+// ── Handlers ────────────────────────────────────────────────────────
+const tradeHandler = createTradeHandler({
+  economy,
+  getPlayerSystem: (id) => gameLoop.getPlayerSystem(id),
 });
 
+const movementHandler = createMovementHandler({
+  gameLoop,
+  missions,
+  playerMissions,
+});
+
+const combatHandler = createCombatHandler({
+  gameLoop,
+  missions,
+  playerMissions,
+  playerKills,
+});
+
+const chatHandler = createChatHandler({ chat });
+
+const tradeReqHandler = createTradeRequestHandler({
+  economy,
+  missions,
+  playerMissions,
+  getPlayerSystem: (id) => gameLoop.getPlayerSystem(id),
+});
+
+// ── HTTP server ─────────────────────────────────────────────────────
+const router = createRouter({ playerCount: () => gameLoop.playerCount() });
+const httpServer = createServer(router);
+
+// ── WebSocket server ────────────────────────────────────────────────
 const wss = createWSServer(
   httpServer,
+  // onConnect
   (session) => {
     gameLoop.addPlayer(session);
-    // Init player missions from DB
-    const dbMissions = getPlayerMissions(session.playerId) as any[];
-    playerMissions.set(session.playerId, dbMissions.map((m: any) => ({
+    const dbMissions = getPlayerMissions(session.playerId);
+    playerMissions.set(session.playerId, dbMissions.map((m) => ({
       id: m.mission_id,
-      type: m.type,
+      type: m.type as MissionDef['type'],
       title: m.title,
       description: m.description,
       reward: m.reward,
@@ -73,160 +95,88 @@ const wss = createWSServer(
     })));
     playerKills.set(session.playerId, 0);
   },
+  // onDisconnect
   (playerId) => {
     gameLoop.removePlayer(playerId);
     playerMissions.delete(playerId);
     playerKills.delete(playerId);
   },
+  // onMessage
   (session, msg: ClientMessage, broadcast) => {
-    // Helper: send message only to this player
     const reply = (m: ServerMessage) => session.ws.send(JSON.stringify(m));
 
     switch (msg.type) {
+      case 'fire_bolt':
+        combatHandler.handleFireBolt(session, msg.payload);
+        break;
+
       case 'input':
-        gameLoop.handleInput(session, msg.payload as InputPayload);
+        movementHandler.handleInput(session, msg.payload as InputPayload);
         break;
 
       case 'jump_request':
-        gameLoop.handleJumpRequest(session, msg.payload.targetSystem);
-        // Complete deliver missions on jump
-        {
-          const pms = playerMissions.get(session.playerId) || [];
-          for (const m of pms) {
-            if (m.type === 'deliver' && !m.completed) {
-              const result = missions.completeDelivery(pms, m.id);
-              if (result.success) {
-                const player = getPlayer(session.playerId) as any;
-                const newCredits = player.credits + (result.reward || 0);
-                updatePlayerCredits(session.playerId, newCredits);
-                upsertPlayerMission(session.playerId, m);
-                reply({ type: 'player_state', payload: { playerId: session.playerId, credits: newCredits } as any });
-                reply({ type: 'missions', payload: { missions: pms } });
-              }
-            }
-          }
-        }
+        movementHandler.handleJump(session, msg.payload.targetSystem, reply);
         break;
 
-      case 'trade_buy': {
-        const player = getPlayer(session.playerId) as any;
-        const cargo = getPlayerCargo(session.playerId) as any[];
-        const result = economy.buyFromStation(
-          gameLoop.getPlayerSystem(session.playerId),
-          msg.payload.goodId, msg.payload.quantity,
-          player.credits, player.cargo_used || 0, player.cargo_capacity || 20,
-        );
-        if (result.success) {
-          updatePlayerCredits(session.playerId, result.newCredits!);
-          updatePlayerCargo(session.playerId, result.newCargoUsed!);
-          upsertPlayerCargo(session.playerId, msg.payload.goodId, (cargo.find((c: any) => c.good_id === msg.payload.goodId)?.quantity || 0) + msg.payload.quantity);
+      case 'trade_request':
+        tradeReqHandler.onTradeRequest(session.playerId, (srvMsg) => {
+          session.ws.send(JSON.stringify(srvMsg));
+        });
+        break;
+
+      case 'trade_buy':
+        tradeHandler.handleBuy(session, msg.payload.goodId, msg.payload.quantity, reply);
+        break;
+
+      case 'trade_sell':
+        tradeHandler.handleSell(session, msg.payload.goodId, msg.payload.quantity, reply);
+        break;
+
+      case 'mission_accept': {
+        // Accept a specific mission from the player's mission list
+        const pms = playerMissions.get(session.playerId) || [];
+        const mission = pms.find(m => m.id === msg.payload.missionId);
+        if (mission && !mission.completed) {
+          console.log(`[KOSM] Player ${session.username} accepted mission ${mission.id}`);
+          // Mission progress is tracked automatically via kills/deliveries
         }
-        reply(result.success
-          ? { type: 'trade_menu', payload: { goods: economy.getMarket(gameLoop.getPlayerSystem(session.playerId), getPlayerCargo(session.playerId) as any).goods, credits: result.newCredits! } }
-          : { type: 'error', payload: { code: 'TRADE', message: result.error || 'Trade failed' } });
         break;
       }
 
-      case 'trade_sell': {
-        const player = getPlayer(session.playerId) as any;
-        const cargo = getPlayerCargo(session.playerId) as any[];
-        const currentQty = cargo.find((c: any) => c.good_id === msg.payload.goodId)?.quantity || 0;
-        if (currentQty < msg.payload.quantity) {
-          reply({ type: 'error', payload: { code: 'TRADE', message: 'Not enough cargo' } });
-          break;
-        }
-        const result = economy.sellToStation(
-          gameLoop.getPlayerSystem(session.playerId),
-          msg.payload.goodId, msg.payload.quantity,
-          player.credits, player.cargo_used || 0,
-        );
-        if (result.success) {
-          updatePlayerCredits(session.playerId, result.newCredits!);
-          updatePlayerCargo(session.playerId, result.newCargoUsed!);
-          upsertPlayerCargo(session.playerId, msg.payload.goodId, currentQty - msg.payload.quantity);
-        }
-        reply(result.success
-          ? { type: 'trade_menu', payload: { goods: economy.getMarket(gameLoop.getPlayerSystem(session.playerId), getPlayerCargo(session.playerId) as any).goods, credits: result.newCredits! } }
-          : { type: 'error', payload: { code: 'TRADE', message: result.error || 'Sell failed' } });
+      case 'chat_message':
+        chatHandler.handleChatMessage(session, msg.payload.text, broadcast);
         break;
-      }
-
-      case 'mission_accept':
-        // Missions are auto-generated when player requests via trade menu
-        break;
-
-      case 'chat_message': {
-        const chatMsg = chat.addMessage(session.username, msg.payload.text);
-        broadcast({ type: 'chat_broadcast', payload: chatMsg });
-        break;
-      }
     }
   },
 );
 
-// Track kills and update missions
-gameLoop.onKill((playerId: string, killCount: number) => {
-  const pms = playerMissions.get(playerId) || [];
-  const prevKills = playerKills.get(playerId) || 0;
-  playerKills.set(playerId, prevKills + killCount);
+// ── Cross-cutting callbacks ─────────────────────────────────────────
 
-  const { completed } = missions.updateKillProgress(pms, killCount);
-  for (const m of completed) {
-    const player = getPlayer(playerId) as any;
-    const newCredits = player.credits + m.reward;
-    updatePlayerCredits(playerId, newCredits);
-    upsertPlayerMission(playerId, m);
-    changeReputation(playerId, 'federation', 10);
-    // Send update to player (find their session)
-    wss.clients.forEach(client => {
-      client.send(JSON.stringify({ type: 'missions', payload: { missions: pms } }));
-    });
-  }
-});
-
-// Generate missions when player requests (via trade menu or on connect)
-gameLoop.onTradeRequest((playerId: string) => {
-  const systemSeed = gameLoop.getPlayerSystem(playerId);
-  const newMissions = missions.generateMissions(systemSeed);
-  const existing = playerMissions.get(playerId) || [];
-  const all = [...existing.filter(m => !m.completed), ...newMissions].slice(0, 6);
-  playerMissions.set(playerId, all);
-
-  // Also send market data
-  const player = getPlayer(playerId) as any;
-  const cargo = getPlayerCargo(playerId) as any[];
-  const market = economy.getMarket(systemSeed, cargo);
-
-  // Find player's WebSocket and send
-  wss.clients.forEach(client => {
-    // We need to map player ID to ws... simplified for now
-    client.send(JSON.stringify({
-      type: 'trade_menu',
-      payload: { goods: market.goods, credits: player.credits },
-    }));
-    client.send(JSON.stringify({
-      type: 'missions',
-      payload: { missions: all },
-    }));
+// Kill → mission progress + reputation
+gameLoop.onKill((playerId, killCount) => {
+  combatHandler.onKill(playerId, killCount, (msg) => {
+    const data = JSON.stringify(msg);
+    wss.clients.forEach(c => { if (c.readyState === 1) c.send(data); });
   });
 });
 
-// Broadcast world snapshots
+// Trade request → generate missions + market
+gameLoop.onTradeRequest((playerId) => {
+  tradeReqHandler.onTradeRequest(playerId, (msg) => {
+    const data = JSON.stringify(msg);
+    wss.clients.forEach(c => { if (c.readyState === 1) c.send(data); });
+  });
+});
+
+// World snapshot broadcast
 gameLoop.setBroadcast((msg: ServerMessage) => {
   const data = JSON.stringify(msg);
-
-  // For world_snapshot, send individually with player-specific data
-  if (msg.type === 'world_snapshot') {
-    // Everyone gets the same snapshot for now — OK for global state
-  }
-
   wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(data);
-    }
+    if (client.readyState === 1) client.send(data);
   });
 });
 
+// ── Start ───────────────────────────────────────────────────────────
 gameLoop.start();
 
 httpServer.listen(PORT, () => {
@@ -235,5 +185,12 @@ httpServer.listen(PORT, () => {
   console.log(`[KOSM Server] WS: ws://localhost:${PORT}/ws`);
 });
 
-process.on('SIGINT', () => { gameLoop.stop(); process.exit(0); });
-process.on('SIGTERM', () => { gameLoop.stop(); process.exit(0); });
+// ── Graceful shutdown ───────────────────────────────────────────────
+function shutdown() {
+  console.log('[KOSM] Shutting down...');
+  gameLoop.stop();
+  httpServer.close();
+  process.exit(0);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

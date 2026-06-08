@@ -10,6 +10,62 @@ import { gameState } from '../ui/store/gameStore';
 import { NebulaSystem } from '../rendering/NebulaSystem';
 import { WarpEffect } from '../rendering/WarpEffect';
 
+// ── Spatial hash for O(1) hit detection ─────────────────────────────
+
+const HASH_CELL_SIZE = 10; // 10-unit grid cells
+
+class SpatialHash<T extends { position: THREE.Vector3 }> {
+  private cells = new Map<number, T[]>();
+
+  clear(): void {
+    this.cells.clear();
+  }
+
+  private key(x: number, y: number, z: number): number {
+    const ix = Math.floor(x / HASH_CELL_SIZE);
+    const iy = Math.floor(y / HASH_CELL_SIZE);
+    const iz = Math.floor(z / HASH_CELL_SIZE);
+    // Simple hash combining 3 ints
+    return ((ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791)) >>> 0;
+  }
+
+  insert(item: T): void {
+    const k = this.key(item.position.x, item.position.y, item.position.z);
+    let bucket = this.cells.get(k);
+    if (!bucket) { bucket = []; this.cells.set(k, bucket); }
+    bucket.push(item);
+  }
+
+  /** Find all items within `radius` of `pos` */
+  query(pos: THREE.Vector3, radius: number): T[] {
+    const results: T[] = [];
+    const r = HASH_CELL_SIZE;
+    const minX = Math.floor((pos.x - radius) / r);
+    const maxX = Math.floor((pos.x + radius) / r);
+    const minY = Math.floor((pos.y - radius) / r);
+    const maxY = Math.floor((pos.y + radius) / r);
+    const minZ = Math.floor((pos.z - radius) / r);
+    const maxZ = Math.floor((pos.z + radius) / r);
+
+    for (let ix = minX; ix <= maxX; ix++) {
+      for (let iy = minY; iy <= maxY; iy++) {
+        for (let iz = minZ; iz <= maxZ; iz++) {
+          const k = ((ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791)) >>> 0;
+          const bucket = this.cells.get(k);
+          if (bucket) {
+            for (const item of bucket) {
+              if (item.position.distanceToSquared(pos) <= radius * radius) {
+                results.push(item);
+              }
+            }
+          }
+        }
+      }
+    }
+    return results;
+  }
+}
+
 /**
  * Scene manager — all game objects, lifecycle.
  */
@@ -145,23 +201,27 @@ export class SceneManager {
     const { bolts } = weapon;
     if (!bolts || bolts.length === 0) return;
 
+    // Build spatial hash of enemy positions
+    interface EnemyRef { enemy: EnemyShip; position: THREE.Vector3 }
+    const hash = new SpatialHash<EnemyRef>();
+    for (const enemy of this.enemies) {
+      hash.insert({ enemy, position: enemy.flightModel.state.position });
+    }
+
     for (let bi = bolts.length - 1; bi >= 0; bi--) {
       const bolt = bolts[bi];
-      for (let ei = 0; ei < this.enemies.length; ei++) {
-        const enemy = this.enemies[ei];
-        const dist = bolt.position.distanceTo(enemy.flightModel.state.position);
-        if (dist < 2.5) {
-          enemy.takeDamage(resolveDamage());
-          gameState.lastHitTime = Date.now();
-          (window as any).__kosmLastHit = Date.now();
-          // Remove bolt
-          const b = bolts[bi];
-          this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
-          (b.head.material as THREE.Material).dispose(); (b.trail.material as THREE.Material).dispose();
-          b.head.geometry.dispose(); b.trail.geometry.dispose();
-          bolts.splice(bi, 1);
-          break;
-        }
+      const nearby = hash.query(bolt.position, 2.5);
+      for (const ref of nearby) {
+        ref.enemy.takeDamage(resolveDamage());
+        gameState.lastHitTime = Date.now();
+        (window as any).__kosmLastHit = Date.now();
+        // Remove bolt
+        const b = bolts[bi];
+        this.scene.remove(b.head); this.scene.remove(b.trail); this.scene.remove(b.light);
+        (b.head.material as THREE.Material).dispose(); (b.trail.material as THREE.Material).dispose();
+        b.head.geometry.dispose(); b.trail.geometry.dispose();
+        bolts.splice(bi, 1);
+        break;
       }
     }
   }
@@ -170,36 +230,45 @@ export class SceneManager {
   getPlayerShip(): ShipController | null { return this.playerShip; }
   getEnemies(): EnemyShip[] { return this.enemies; }
   getStation(): SpaceStation | null { return this.station; }
+  addExplosion(effect: ExplosionEffect): void { this.explosions.push(effect); }
 
   private checkPlayerDamage(): void {
     if (!this.playerShip) return;
     const playerPos = this.playerShip.flightModel.state.position;
+    const BOLT_HIT_RADIUS = 1.5;
+
+    // Collect all enemy bolts with their owner
+    interface BoltRef { bolt: EnemyShip['enemyBolts'][0]; enemy: EnemyShip }
+    const hash = new SpatialHash<BoltRef & { position: THREE.Vector3 }>();
     for (const enemy of this.enemies) {
-      for (let bi = enemy.enemyBolts.length - 1; bi >= 0; bi--) {
-        const bolt = enemy.enemyBolts[bi];
-        const dist = bolt.position.distanceTo(playerPos);
-        if (dist < 1.5) {
-          // Remove bolt
-          this.scene.remove(bolt.head); this.scene.remove(bolt.trail); this.scene.remove(bolt.light);
-          (bolt.head.material as THREE.Material).dispose(); (bolt.trail.material as THREE.Material).dispose();
-          bolt.head.geometry.dispose(); bolt.trail.geometry.dispose();
-          enemy.enemyBolts.splice(bi, 1);
-          // Apply damage to player
-          const p = gameState.player;
-          let dmg = 10;
-          if (p.shield > 0) {
-            const shieldDmg = Math.min(p.shield, dmg);
-            gameState.updatePlayer({ shield: p.shield - shieldDmg });
-            dmg -= shieldDmg;
-          }
-          if (dmg > 0) {
-            gameState.updatePlayer({ hull: Math.max(0, p.hull - dmg) });
-          }
-          gameState.lastDamageTime = Date.now();
-          (window as any).__kosmLastDmg = Date.now();
-          this.playerShip?.addShake(0.5);
-        }
+      for (const bolt of enemy.enemyBolts) {
+        hash.insert({ bolt, enemy, position: bolt.position } as any);
       }
+    }
+
+    const nearby = hash.query(playerPos, BOLT_HIT_RADIUS);
+    for (const { bolt, enemy } of nearby) {
+      // Remove bolt
+      this.scene.remove(bolt.head); this.scene.remove(bolt.trail); this.scene.remove(bolt.light);
+      (bolt.head.material as THREE.Material).dispose(); (bolt.trail.material as THREE.Material).dispose();
+      bolt.head.geometry.dispose(); bolt.trail.geometry.dispose();
+      const idx = enemy.enemyBolts.indexOf(bolt);
+      if (idx >= 0) enemy.enemyBolts.splice(idx, 1);
+
+      // Apply damage to player
+      const p = gameState.player;
+      let dmg = 10;
+      if (p.shield > 0) {
+        const shieldDmg = Math.min(p.shield, dmg);
+        gameState.updatePlayer({ shield: p.shield - shieldDmg });
+        dmg -= shieldDmg;
+      }
+      if (dmg > 0) {
+        gameState.updatePlayer({ hull: Math.max(0, p.hull - dmg) });
+      }
+      gameState.lastDamageTime = Date.now();
+      (window as any).__kosmLastDmg = Date.now();
+      this.playerShip?.addShake(0.5);
     }
   }
 

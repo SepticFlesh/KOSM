@@ -31,10 +31,8 @@ export async function initSharedGame(
   // Set mode on SceneManager (controls AI/hit-detection behavior)
   sceneManager.mode = mode;
 
-  // Direct DOM HUD for SP; MP provides its own via network
-  if (mode === 'single-player') {
-    engine.registerDirectHUD();
-  }
+  // Direct DOM HUD for both modes
+  engine.registerDirectHUD();
 
   // Universe — 32 star systems
   const universe = new Universe(32);
@@ -96,7 +94,7 @@ export async function initSharedGame(
   soundManager.startEngine();
 
   // Position the ship
-  playerShip.flightModel.reset(new THREE.Vector3(600, 250, -800));
+  playerShip.flightModel.reset(new THREE.Vector3(1600, 80, -400));
 
   console.log('[KOSM] Shared game ready.');
 

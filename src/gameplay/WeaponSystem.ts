@@ -116,7 +116,7 @@ export class WeaponSystem {
       td.push({ offset: (i+1)*0.4, life: (1 - i/N)*0.6 });
     }
 
-    this.bolts.push({ head, trail, light, position: pos.clone(), velocity: dir.clone().multiplyScalar(400), life: 1.2, maxLife: 1.2, trailData: td });
+    this.bolts.push({ head, trail, light, position: pos.clone(), velocity: dir.clone().multiplyScalar(1000), life: 1.2, maxLife: 1.2, trailData: td });
   }
 
   update(dt: number): void {

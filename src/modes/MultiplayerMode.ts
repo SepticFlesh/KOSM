@@ -5,10 +5,12 @@ import type { ShipController } from '../gameplay/ShipController';
 import type { WSClient } from '../network/wsClient';
 import { InputSync } from '../network/inputSync';
 import { EntityInterpolator } from '../network/entityInterpolation';
-import { RemotePlayer } from '../gameplay/RemotePlayer';
+import { RemotePlayer, type ShipVisualType } from '../gameplay/RemotePlayer';
 import type { WorldSnapshot, ServerMessage } from '../network/protocol';
 import { soundManager } from '../audio/SoundManager';
 import { gameState } from '../ui/store/gameStore';
+import { createHUDSync } from './hudSync.js';
+import type { BlipEntity } from './hudSync.js';
 
 export interface MPContext {
   ws: WSClient;
@@ -37,12 +39,17 @@ export function attachMultiplayer(
   let fireActive = false;
   let mineActive = false;
 
-  // Track fire/mine state from weapon system
+  // Weapon fire → send bolt to server
   const origFire = playerShip.weaponSystem.fire.bind(playerShip.weaponSystem);
   playerShip.weaponSystem.fire = function (...args: any[]) {
-    fireActive = true;
-    setTimeout(() => { fireActive = false; }, 100);
-    return (origFire as any).apply(playerShip.weaponSystem, args);
+    const wasOnCooldown = (playerShip.weaponSystem as any).cooldown > 0;
+    const result = (origFire as any).apply(playerShip.weaponSystem, args);
+    if (!wasOnCooldown) {
+      const f = new THREE.Vector3(0,0,1).applyQuaternion(playerShip.flightModel.state.orientation);
+      const p = playerShip.flightModel.state.position.clone().add(f.clone().multiplyScalar(2));
+      ws.send({ type: 'fire_bolt' as any, payload: { pos: {x:p.x,y:p.y,z:p.z}, dir: {x:f.x,y:f.y,z:f.z} } });
+    }
+    return result;
   };
 
   // FTL Jump — send to server
@@ -52,9 +59,9 @@ export function attachMultiplayer(
     ws.send({ type: 'jump_request', payload: { targetSystem: nextIdx } });
   };
 
-  // Trade — запросить рынок с сервера (Phase E)
+  // Trade — запросить рынок с сервера
   playerShip.onTradeRequest = () => {
-    console.log('[MP] Trade — not yet implemented');
+    ws.send({ type: 'trade_request', payload: {} });
   };
 
   // Mining — запросить с сервера (Phase E)
@@ -67,6 +74,9 @@ export function attachMultiplayer(
     switch (msg.type) {
       case 'world_snapshot': {
         const snap = msg.payload as WorldSnapshot;
+        // Cache for radar/map
+        (window as any).__kosmMPEntities = snap.entities.filter(e => e.id !== playerId).map(e => ({ id:e.id, px:e.position.x, py:e.position.y, pz:e.position.z, health:e.health, isNPC:!e.ownerId, isPlayer:!!e.ownerId, npcType:(e as any).npcType||'enemy' }));
+        (window as any).__kosmRoutes = (snap as any).routes || [];
         // Reconcile local player
         const myState = inputSync.getPlayerState(playerId, snap);
         if (myState) {
@@ -85,16 +95,12 @@ export function attachMultiplayer(
 
           let rp = remotePlayers.get(e.id);
           if (!rp) {
-            const label = e.ownerId
-              ? `Player_${e.id.slice(0, 4)}`
-              : (e.npcType || 'NPC');
-            rp = new RemotePlayer(scene, e.id, label);
-            // Color NPCs red
-            if (!e.ownerId && rp.mesh.children[0] instanceof THREE.Mesh) {
-              (rp.mesh.children[0] as THREE.Mesh).material = new THREE.MeshStandardMaterial({
-                color: 0xaa2222, roughness: 0.5, metalness: 0.6,
-              });
-            }
+            const isNPC = !e.ownerId;
+            const label = isNPC ? (e.npcType || 'NPC') : `Player_${e.id.slice(0, 4)}`;
+            const nt = (e as any).npcType || '';
+            const vtype: ShipVisualType = (nt === 'trader' || nt === 'shuttle' || nt === 'transport' || nt === 'liner') ? 'trader' : nt === 'pirate' ? 'pirate' : 'default';
+            rp = new RemotePlayer(scene, e.id, label, vtype);
+            rp.isNPC = isNPC;
             remotePlayers.set(e.id, rp);
           }
 
@@ -158,6 +164,7 @@ export function attachMultiplayer(
 
 /**
  * Запускает HUD sync для MP.
+ * Делегирует в shared createHUDSync с MP-специфичными параметрами.
  */
 export function startMPHUDSync(
   engine: Engine,
@@ -165,51 +172,21 @@ export function startMPHUDSync(
   playerShip: ShipController,
   universe: Universe,
 ): () => void {
-  let destroyed = false;
-  let lastFrame = Date.now();
-  let hudSyncRef: number;
-
-  const sync = () => {
-    if (destroyed) return;
-    const fm = playerShip.flightModel;
-    const shipPos = fm.state.position;
-
-    const now = Date.now();
-    const dt = Math.min((now - lastFrame) / 1000, 0.1);
-    lastFrame = now;
-
-    const lastDmg = (gameState as any).lastDamageTime || 0;
-    let shield = gameState.player.shield;
-    if (now - lastDmg > 3000 && shield < 100) {
-      shield = Math.min(100, shield + dt * 1);
-    }
-
-    const hudRef = (window as any).__kosmHUD;
-    if (hudRef) {
-      Object.assign(hudRef, {
-        speed: fm.state.velocity.length(),
-        throttle: fm.state.throttle,
-        boostEnergy: fm.state.boostEnergy,
-        shield,
-        hull: gameState.player.hull,
-        flightMode: fm.state.mode,
-        distanceToStar: shipPos.distanceTo(starPos),
-        starName: universe.getCurrentSystem().name,
-        fps: engine.getFps(),
-        cargoUsed: gameState.cargoUsed,
-        cargoMax: gameState.cargoMax,
-        targetDist: (playerShip as any).targetDistance || 0,
-      });
-    }
-    soundManager.updateEngine(fm.state.throttle, fm.boostActive);
-
-    hudSyncRef = requestAnimationFrame(sync);
-  };
-
-  hudSyncRef = requestAnimationFrame(sync);
-
-  return () => {
-    destroyed = true;
-    cancelAnimationFrame(hudSyncRef);
-  };
+  return createHUDSync({
+    engine,
+    starPos,
+    playerShip,
+    universe,
+    source: 'mp',
+    getEntities: (): BlipEntity[] => {
+      const mpEnts: any[] = (window as any).__kosmMPEntities || [];
+      return mpEnts.map((e: any) => ({
+        px: e.px, py: e.py, pz: e.pz,
+        health: e.health,
+        type: (e.isPlayer ? 'player' : 'enemy') as BlipEntity['type'],
+        npcType: e.npcType || 'enemy',
+        isPlayer: !!e.isPlayer,
+      }));
+    },
+  });
 }

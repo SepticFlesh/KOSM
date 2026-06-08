@@ -43,7 +43,7 @@
 /* ─── Throttle bar (vertical, right of center) ─── */
 .throttle-bar {
   position: absolute;
-  bottom: 80px;
+  bottom: 8px;
   left: calc(50% + 120px);
   display: flex;
   flex-direction: column;
@@ -76,7 +76,7 @@
 /* ─── Boost bar (vertical, left of center) ─── */
 .boost-bar {
   position: absolute;
-  bottom: 80px;
+  bottom: 8px;
   left: calc(50% - 140px);
   display: flex;
   flex-direction: column;
@@ -157,6 +157,12 @@
   left: 20px;
   pointer-events: none;
 }
+.navigator-container {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  pointer-events: none;
+}
 .radar-label {
   font-size: 9px;
   color: #6cf;
@@ -187,13 +193,13 @@
   .speed-value { font-size: 24px !important; }
   .speed-label { font-size: 9px !important; }
   .flight-mode { bottom: 50px !important; font-size: 10px !important; padding: 1px 6px !important; }
-  .throttle-bar, .boost-bar { bottom: 60px !important; }
+  .throttle-bar, .boost-bar { bottom: 4px !important; }
   .throttle-track, .boost-track { height: 50px !important; }
   .ship-status { bottom: 15px !important; right: 10px !important; font-size: 9px !important; }
   .controls-hint { top: 4px !important; left: 4px !important; font-size: 8px !important; }
   .hud-fps { top: 6px !important; right: 8px !important; font-size: 9px !important; }
-  .radar-container { top: 2px !important; left: 2px !important; bottom: auto !important; }
+  .radar-container { top: 2px !important; right: 2px !important; left: auto !important; bottom: auto !important; }
   .radar-container canvas { width: 100px !important; height: 100px !important; }
   .controls-hint { display: none !important; }
-  #hud-center { bottom: 2% !important; }
+  #hud-center { bottom: 0 !important; }
 }

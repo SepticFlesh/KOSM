@@ -7,6 +7,41 @@ const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '..', 'data', 
 
 let db: Database.Database;
 
+// ── Typed row interfaces ────────────────────────────────────────────
+
+export interface PlayerRow {
+  id: string;
+  github_id: string;
+  username: string;
+  credits: number;
+  cargo_capacity: number;
+  cargo_used: number;
+  hull: number;
+  shield: number;
+  current_system: number;
+  position_x: number;
+  position_y: number;
+  position_z: number;
+  created_at: string;
+  last_login: string;
+}
+
+export interface CargoRow {
+  good_id: string;
+  quantity: number;
+}
+
+export interface MissionRow {
+  mission_id: number;
+  type: string;
+  title: string;
+  description: string;
+  reward: number;
+  progress: number;
+  target: number;
+  completed: number; // SQLite bool as 0/1
+}
+
 export function getDB(): Database.Database {
   if (!db) {
     db = new Database(DB_PATH);
@@ -76,7 +111,7 @@ function migrate(): void {
 
 export function findOrCreatePlayer(githubId: string, username: string): { id: string; username: string; credits: number } {
   const db = getDB();
-  const existing = db.prepare('SELECT id, username, credits FROM players WHERE github_id = ?').get(githubId) as any;
+  const existing = db.prepare('SELECT id, username, credits FROM players WHERE github_id = ?').get(githubId) as PlayerRow | undefined;
   if (existing) {
     db.prepare('UPDATE players SET last_login = datetime(\'now\') WHERE id = ?').run(existing.id);
     return existing;
@@ -96,8 +131,8 @@ export function findOrCreatePlayer(githubId: string, username: string): { id: st
   return { id, username, credits: 1000 };
 }
 
-export function getPlayer(id: string): any {
-  return getDB().prepare('SELECT * FROM players WHERE id = ?').get(id);
+export function getPlayer(id: string): PlayerRow | undefined {
+  return getDB().prepare('SELECT * FROM players WHERE id = ?').get(id) as PlayerRow | undefined;
 }
 
 export function updatePlayerCredits(id: string, credits: number): void {
@@ -119,25 +154,25 @@ export function updatePlayerPosition(id: string, x: number, y: number, z: number
 }
 
 export function getPlayerUpgrades(id: string): Record<string, number> {
-  const rows = getDB().prepare('SELECT upgrade_id, level FROM player_upgrades WHERE player_id = ?').all(id) as any[];
+  const rows = getDB().prepare('SELECT upgrade_id, level FROM player_upgrades WHERE player_id = ?').all(id) as Array<{ upgrade_id: string; level: number }>;
   const upgrades: Record<string, number> = {};
   for (const r of rows) upgrades[r.upgrade_id] = r.level;
   return upgrades;
 }
 
 export function getPlayerReputation(id: string): Record<string, number> {
-  const rows = getDB().prepare('SELECT faction_id, value FROM player_reputation WHERE player_id = ?').all(id) as any[];
+  const rows = getDB().prepare('SELECT faction_id, value FROM player_reputation WHERE player_id = ?').all(id) as Array<{ faction_id: string; value: number }>;
   const rep: Record<string, number> = {};
   for (const r of rows) rep[r.faction_id] = r.value;
   return rep;
 }
 
-export function getPlayerCargo(id: string): any[] {
-  return getDB().prepare('SELECT good_id, quantity FROM player_cargo WHERE player_id = ?').all(id);
+export function getPlayerCargo(id: string): CargoRow[] {
+  return getDB().prepare('SELECT good_id, quantity FROM player_cargo WHERE player_id = ?').all(id) as CargoRow[];
 }
 
-export function getPlayerMissions(id: string): any[] {
-  return getDB().prepare('SELECT * FROM player_missions WHERE player_id = ?').all(id);
+export function getPlayerMissions(id: string): MissionRow[] {
+  return getDB().prepare('SELECT * FROM player_missions WHERE player_id = ?').all(id) as MissionRow[];
 }
 
 export function upsertPlayerCargo(id: string, goodId: string, qty: number): void {

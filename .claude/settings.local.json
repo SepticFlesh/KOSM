@@ -14,7 +14,17 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(gh auth *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(git push *)",
+      "Bash(ssh *)",
+      "Bash(brew install *)",
+      "Bash(sshpass *)",
+      "Bash(scp *)",
+      "Bash(grep -E '\\\\.env$|\\\\.env\\\\.')",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx vitest *)",
+      "Bash(sed -i '' 's|node dist/index.js|node dist/server/src/index.js|g' /Users/admin/Documents/Neuro/KOSM/deploy.sh)",
+      "Bash(sed -i '' 's|pkill -f \"node dist/index.js\"|pkill -f \"node dist\"|g' /Users/admin/Documents/Neuro/KOSM/deploy.sh)"
     ]
   }
 }

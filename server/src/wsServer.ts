@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Server } from 'node:http';
 import { verifyToken, generateToken } from './auth.js';
 import { findOrCreatePlayer } from './db.js';
-import type { ClientMessage, ServerMessage, AuthOkMessage } from './protocol/messages.js';
+import { validateClientMessage, type ClientMessage, type ServerMessage, type AuthOkMessage } from './protocol/messages.js';
 
 export interface PlayerSession {
   ws: WebSocket;
@@ -18,9 +18,44 @@ export type MessageHandler = (
   broadcast: (msg: ServerMessage, excludePlayerId?: string) => void,
 ) => void;
 
-/**
- * WebSocket server wrapper.
- */
+// ── Rate limiting ───────────────────────────────────────────────────
+const RATE_WINDOW_MS = 1000;
+const RATE_MAX_MSG = 60; // messages per second per player
+
+class RateLimiter {
+  private buckets = new Map<string, { count: number; resetAt: number }>();
+
+  /** Returns true if the message is allowed, false if rate-limited. */
+  allow(playerId: string): boolean {
+    const now = Date.now();
+    const entry = this.buckets.get(playerId);
+    if (!entry || now >= entry.resetAt) {
+      this.buckets.set(playerId, { count: 1, resetAt: now + RATE_WINDOW_MS });
+      return true;
+    }
+    if (entry.count >= RATE_MAX_MSG) return false;
+    entry.count++;
+    return true;
+  }
+
+  /** Clean up disconnected players */
+  remove(playerId: string): void {
+    this.buckets.delete(playerId);
+  }
+
+  /** Periodic cleanup of stale buckets */
+  cleanup(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.buckets) {
+      if (now >= entry.resetAt + 5000) this.buckets.delete(id);
+    }
+  }
+}
+
+const rateLimiter = new RateLimiter();
+// Run cleanup every 30 seconds
+setInterval(() => rateLimiter.cleanup(), 30000);
+
 export function createWSServer(
   httpServer: Server,
   onConnect: (session: PlayerSession) => void,
@@ -30,6 +65,7 @@ export function createWSServer(
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    console.log('[WS] New connection from', req.socket.remoteAddress);
     let session: PlayerSession | null = null;
     let authenticated = false;
 
@@ -38,18 +74,36 @@ export function createWSServer(
       try {
         msg = JSON.parse(raw.toString());
       } catch {
+        console.log('[WS] Invalid JSON:', raw.toString().slice(0, 100));
         ws.send(JSON.stringify({ type: 'error', payload: { code: 'PARSE', message: 'Invalid JSON' } }));
         return;
       }
 
-      // First message must be auth
+      // Zod validation
+      const validation = validateClientMessage(msg);
+      if (!validation.ok) {
+        console.log('[WS] Validation failed:', validation.error);
+        ws.send(JSON.stringify({ type: 'error', payload: { code: 'VALIDATION', message: validation.error } }));
+        return;
+      }
+      msg = validation.msg as ClientMessage;
+
+      // Rate limiting (after auth, per-player)
+      if (session && !rateLimiter.allow(session.playerId)) {
+        // Drop silently — don't flood the client with error messages
+        return;
+      }
+      console.log('[WS] Message:', msg.type);
+
       if (!authenticated) {
         if (msg.type !== 'auth') {
+          console.log('[WS] Expected auth, got:', msg.type);
           ws.send(JSON.stringify({ type: 'auth_error', payload: { reason: 'Auth required first' } }));
           ws.close();
           return;
         }
         const payload = verifyToken(msg.payload.token);
+        console.log('[WS] Auth attempt, verified:', !!payload, payload?.username);
         if (!payload) {
           ws.send(JSON.stringify({ type: 'auth_error', payload: { reason: 'Invalid token' } }));
           ws.close();
@@ -62,6 +116,7 @@ export function createWSServer(
           username: payload.username,
           alive: true,
         };
+        console.log('[WS] Sending auth_ok to', payload.username);
         ws.send(JSON.stringify({
           type: 'auth_ok',
           payload: { playerId: payload.playerId, username: payload.username },
@@ -70,17 +125,11 @@ export function createWSServer(
         return;
       }
 
-      // Route message
       if (session) {
         const broadcast = (srvMsg: ServerMessage, excludePlayerId?: string) => {
           const data = JSON.stringify(srvMsg);
           wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
-              // If excludePlayerId provided, find the session and skip
-              if (excludePlayerId) {
-                // We need to track which ws belongs to which player
-                // Simplified: broadcast to all except sender
-              }
               client.send(data);
             }
           });
@@ -89,16 +138,20 @@ export function createWSServer(
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
+      console.log('[WS] Close, code:', code);
       if (session) {
         session.alive = false;
+        rateLimiter.remove(session.playerId);
         onDisconnect(session.playerId);
       }
     });
 
-    ws.on('error', () => {
+    ws.on('error', (err) => {
+      console.log('[WS] Error:', err.message);
       if (session) {
         session.alive = false;
+        rateLimiter.remove(session.playerId);
         onDisconnect(session.playerId);
       }
     });

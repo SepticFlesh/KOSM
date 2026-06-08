@@ -3,35 +3,65 @@ import { useGameStore, gameState } from '../ui/store/gameStore';
 import { UPGRADES } from '../data/upgrades';
 
 function MapMini({ data }: any) {
-  const cvRef = useRef<HTMLCanvasElement>(null);
+  const [mapState, setMapState] = useState<{ents:any[];routes:any[];ship:{x:number;z:number;angle:number}}>({ents:[],routes:[],ship:{x:600,z:-800,angle:0}});
+
   useEffect(() => {
-    const cv = cvRef.current; if (!cv || !data) return;
-    const size = 280, dpr = 2;
-    cv.width = size * dpr; cv.height = size * dpr;
-    cv.style.width = size + 'px'; cv.style.height = size + 'px';
-    const ctx = cv.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = 'rgba(0,5,15,0.9)'; ctx.fillRect(0, 0, size, size);
-    const cx = size / 2, cy = size / 2, range = data.range || 150000;
-    ctx.strokeStyle = 'rgba(68,170,255,0.15)'; ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 8; i++) {
-      const x = (i / 8) * size; const y = (i / 8) * size;
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke();
-    }
-    for (const obj of data.objects || []) {
-      const px = cx + (obj.x / range) * (size / 2);
-      const py = cy - (obj.z / range) * (size / 2);
-      ctx.fillStyle = obj.color; ctx.beginPath(); ctx.arc(px, py, Math.max(2, obj.r), 0, Math.PI*2); ctx.fill();
-      if (obj.isPlayer) {
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(px, py);
-        ctx.lineTo(px + Math.sin(obj.angle||0)*10, py - Math.cos(obj.angle||0)*10);
-        ctx.stroke();
-      }
-    }
+    const iv = setInterval(() => {
+      const hud = (window as any).__kosmHUD;
+      setMapState({
+        ents: (window as any).__kosmMPEntities || [],
+        routes: (window as any).__kosmRoutes || (data?.routes || []),
+        ship: { x: hud?._shipX||600, z: hud?._shipZ||-800, angle: hud?._shipYaw||0 },
+      });
+    }, 500);
+    return () => clearInterval(iv);
   }, [data]);
-  return <canvas ref={cvRef} />;
+
+  const size = 280, range = 200000;
+  const scale = (size/2)/range;
+  const cx = size/2, cy = size/2;
+  const {ship, ents, routes} = mapState;
+  const cosA = Math.cos(-ship.angle), sinA = Math.sin(-ship.angle);
+  const proj = (wx:number,wz:number) => {
+    const dx=wx-ship.x, dz=wz-ship.z;
+    return {x:cx+(dx*cosA-dz*sinA)*scale, y:cy-(dx*sinA+dz*cosA)*scale};
+  };
+
+  return (
+    <div style={{width:size,height:size,background:'rgba(0,5,15,0.95)',position:'relative',overflow:'hidden',borderRadius:4,border:'1px solid rgba(68,170,255,0.2)'}}>
+      {/* Grid lines via SVG */}
+      <svg width={size} height={size} style={{position:'absolute',top:0,left:0}}>
+        {[-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8].map(i => {
+          const gx = ship.x + i*(range/8), gz = ship.z + i*(range/8);
+          const s1=proj(gx, ship.z-range), e1=proj(gx, ship.z+range);
+          const s2=proj(ship.x-range, gz), e2=proj(ship.x+range, gz);
+          return (<g key={i}>
+            <line x1={s1.x} y1={s1.y} x2={e1.x} y2={e1.y} stroke="rgba(68,170,255,0.08)" strokeWidth={0.5}/>
+            <line x1={s2.x} y1={s2.y} x2={e2.x} y2={e2.y} stroke="rgba(68,170,255,0.08)" strokeWidth={0.5}/>
+          </g>);
+        })}
+        {/* Route lines */}
+        {routes.map((r:any,ri:number) =>
+          r.waypoints?.slice(0,-1).map((wp:any,wi:number) => {
+            const wp2 = r.waypoints[wi+1];
+            const p1=proj(wp.x,wp.z), p2=proj(wp2.x,wp2.z);
+            return <line key={`${ri}_${wi}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={r.type==='trade'?'rgba(255,170,0,0.35)':'rgba(0,170,255,0.25)'} strokeWidth={0.6}/>;
+          })
+        )}
+      </svg>
+      {/* Entity dots */}
+      {ents.map((e:any,i:number) => {
+        const p = proj(e.px, e.pz);
+        if (p.x<0||p.x>size||p.y<0||p.y>size) return null;
+        const c = e.npcType==='base'?'#4f4':(e.npcType==='trader'||e.npcType==='shuttle')?'#fa0':e.isPlayer?'#48f':'#f44';
+        const s = e.npcType==='base'||e.isPlayer?3:1;
+        return <div key={i} style={{position:'absolute',left:p.x-s/2,top:p.y-s/2,width:s,height:s,background:c,borderRadius:s>1?1:0}}/>;
+      })}
+      {/* Player */}
+      <div style={{position:'absolute',left:cx-5,top:cy-8,width:0,height:0,borderLeft:'5px solid transparent',borderRight:'5px solid transparent',borderBottom:'10px solid #fff'}}/>
+      <div style={{position:'absolute',bottom:2,left:4,fontSize:8,color:'rgba(68,170,255,0.4)',fontFamily:'monospace'}}>200K</div>
+    </div>
+  );
 }
 
 export function SidePanel({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {

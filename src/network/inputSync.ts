@@ -80,21 +80,9 @@ export class InputSync {
     };
   }
 
-  /** Smoothly reconcile local state toward server state */
-  reconcile(playerState: ReturnType<InputSync['getPlayerState']>): void {
-    if (!playerState) return;
-    const state = this.flightModel.state;
-    const dist = state.position.distanceTo(playerState.position);
-    if (dist > 10) {
-      // Hard snap
-      state.position.copy(playerState.position);
-      state.orientation.copy(playerState.orientation);
-      state.velocity.copy(playerState.velocity);
-    } else if (dist > 1) {
-      // Soft correction
-      state.position.lerp(playerState.position, 0.3);
-      state.orientation.slerp(playerState.orientation, 0.3);
-    }
-    // Small correction for close states — trust local prediction
+  /** Reconcile — currently disabled: client position is fully authoritative */
+  reconcile(_playerState: ReturnType<InputSync['getPlayerState']>): void {
+    // Client-authoritative: no reconciliation.
+    // Server position is used for other players, not for local player.
   }
 }

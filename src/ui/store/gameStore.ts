@@ -10,7 +10,7 @@ export interface PlayerHUDState {
   targetDist: number; targetHealth: number;
 }
 export interface RadarBlip {
-  x: number; y: number; height: number; health: number; type: 'enemy' | 'station';
+  x: number; y: number; height: number; health: number; type: 'enemy' | 'station' | 'player';
 }
 export interface TradeItem {
   id: string; name: string; price: number; playerQty: number; stationQty: number;

@@ -9,6 +9,8 @@ import { getStoryStep, createStoryMission } from '../gameplay/StoryMissions';
 import { saveGame } from '../utils/saveLoad';
 import { gameState } from '../ui/store/gameStore';
 import { soundManager } from '../audio/SoundManager';
+import { createHUDSync } from './hudSync.js';
+import type { BlipEntity } from './hudSync.js';
 
 /**
  * Single Player mode — навешивает на корабль SP-колбэки
@@ -176,6 +178,7 @@ export function attachSinglePlayer(
 
 /**
  * Запускает HUD sync и автосохранение для SP.
+ * Делегирует в shared createHUDSync с SP-специфичными параметрами.
  */
 export function startSPHUDSync(
   engine: Engine,
@@ -183,135 +186,38 @@ export function startSPHUDSync(
   playerShip: ShipController,
   universe: Universe,
 ): () => void {
-  let destroyed = false;
-  let lastSave = Date.now();
-  let lastFrame = Date.now();
-  let hudSyncRef: number;
-
-  const sync = () => {
-    if (destroyed) return;
-    const fm = playerShip.flightModel;
-    const shipPos = fm.state.position;
-
-    const now = Date.now();
-    const dt = Math.min((now - lastFrame) / 1000, 0.1);
-    lastFrame = now;
-
-    // Shield regen: +1/sec after 3s of no damage
-    const lastDmg = (gameState as any).lastDamageTime || 0;
-    let shield = gameState.player.shield;
-    if (now - lastDmg > 3000 && shield < 100) {
-      shield = Math.min(100, shield + dt * 1);
-    }
-
-    const hudRef = (window as any).__kosmHUD;
-    if (hudRef) {
-      Object.assign(hudRef, {
-        speed: fm.state.velocity.length(),
-        throttle: fm.state.throttle,
-        boostEnergy: fm.state.boostEnergy,
-        shield,
-        hull: gameState.player.hull,
-        flightMode: fm.state.mode,
-        distanceToStar: shipPos.distanceTo(starPos),
-        starName: universe.getCurrentSystem().name,
-        fps: engine.getFps(),
-        cargoUsed: gameState.cargoUsed,
-        cargoMax: gameState.cargoMax,
-        targetDist: (playerShip as any).targetDistance || 0,
-      });
-    }
-    soundManager.updateEngine(fm.state.throttle, fm.boostActive);
-
-    // Autosave every 10s
-    const saveNow = Date.now();
-    if (saveNow - lastSave >= 10000) {
-      lastSave = saveNow;
+  return createHUDSync({
+    engine,
+    starPos,
+    playerShip,
+    universe,
+    source: 'sp',
+    getEntities: () => {
+      const entities: BlipEntity[] = [];
+      for (const e of engine.getSceneManager().enemies) {
+        const p = e.flightModel.state.position;
+        entities.push({ px: p.x, py: p.y, pz: p.z, health: e.health, type: 'enemy', npcType: 'pirate' });
+      }
+      return entities;
+    },
+    onAutosave: () => {
       saveGame({
         credits: gameState.playerCredits,
         cargoUsed: gameState.cargoUsed,
         missionProgress: Object.fromEntries(
           gameState.missions.map(m => [m.id, { progress: m.progress, completed: m.completed }])
         ),
-        timestamp: saveNow,
+        timestamp: Date.now(),
       });
-    }
-
-    // Radar blips
-    const blips: Array<{ x: number; y: number; height: number; health: number; type: 'enemy' | 'station' }> = [];
-    const radarRange = gameState.getUpgradeLevel('scanner') === 1 ? 5000 :
-      gameState.getUpgradeLevel('scanner') === 2 ? 15000 :
-        gameState.getUpgradeLevel('scanner') === 3 ? 40000 : 80000;
-
-    for (const e of engine.getSceneManager().enemies) {
-      const rel = e.flightModel.state.position.clone().sub(shipPos);
-      const dist = rel.length();
-      const scale = Math.min(dist / radarRange, 1.0);
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(fm.state.orientation);
-      const rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(fm.state.orientation);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(fm.state.orientation);
-      blips.push({
-        x: Math.max(-1, Math.min(1, rel.dot(rgt) / Math.max(dist, 0.01) * scale)),
-        y: Math.max(-1, Math.min(1, rel.dot(fwd) / Math.max(dist, 0.01) * scale)),
-        height: Math.max(-1, Math.min(1, rel.dot(up) / Math.max(dist, 0.01) * scale)),
-        health: e.health / e.maxHealth,
-        type: 'enemy',
-      });
-    }
-
-    const st = engine.getSceneManager().getStation();
-    if (st) {
-      const rel = st.position.clone().sub(shipPos);
-      const dist = rel.length();
-      const scale = Math.min(dist / radarRange, 1.0);
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(fm.state.orientation);
-      const rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(fm.state.orientation);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(fm.state.orientation);
-      blips.push({
-        x: Math.max(-1, Math.min(1, rel.dot(rgt) / Math.max(dist, 0.01) * scale)),
-        y: Math.max(-1, Math.min(1, rel.dot(fwd) / Math.max(dist, 0.01) * scale)),
-        height: Math.max(-1, Math.min(1, rel.dot(up) / Math.max(dist, 0.01) * scale)),
-        health: 1,
-        type: 'station',
-      });
-    }
-    gameState.setRadarBlips(blips);
-    (window as any).__kosmRadarBlips = blips;
-
-    // Map data every 500ms
-    if (Math.floor(Date.now() / 500) !== Math.floor((Date.now() - 100) / 500)) {
-      const mapObjects: any[] = [];
-      mapObjects.push({ x: 0, z: 0, r: 6, color: '#fa4', label: 'Star' });
-      const ss = engine.getSceneManager().getStarSystem();
-      if (ss) {
-        for (const p of ss.getPlanets()) {
-          const pos = p.getPosition();
-          mapObjects.push({ x: pos.x, z: pos.z, r: 3, color: '#6af', label: 'P' });
-        }
+    },
+    getLockedTarget: () => {
+      const pship = engine.getSceneManager().getPlayerShip();
+      const lockedId = (pship as any).lockedEnemyId;
+      if (lockedId !== null && pship && pship.getEnemyById) {
+        const tpos = pship.getEnemyById(lockedId);
+        if (tpos) return { pos: tpos, distance: (pship as any).targetDistance || 0 };
       }
-      const station = engine.getSceneManager().getStation();
-      if (station) mapObjects.push({ x: station.position.x, z: station.position.z, r: 4, color: '#4f4', label: 'Station' });
-      const enems = engine.getSceneManager().enemies;
-      for (const e of enems) {
-        mapObjects.push({ x: e.flightModel.state.position.x, z: e.flightModel.state.position.z, r: 2, color: '#f44' });
-      }
-      mapObjects.push({
-        x: shipPos.x, z: shipPos.z, r: 3, color: '#fff', isPlayer: true,
-        angle: Math.atan2(
-          new THREE.Vector3(1, 0, 0).applyQuaternion(fm.state.orientation).z,
-          new THREE.Vector3(0, 0, 1).applyQuaternion(fm.state.orientation).z
-        ),
-      });
-      gameState.setMapData({ objects: mapObjects, range: 150000 });
-    }
-
-    hudSyncRef = requestAnimationFrame(sync);
-  };
-
-  hudSyncRef = requestAnimationFrame(sync);
-
-  return () => {
-    destroyed = true;
-    cancelAnimationFrame(hudSyncRef);
-  };
+      return null;
+    },
+  });
 }

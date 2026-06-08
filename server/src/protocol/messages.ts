@@ -2,6 +2,15 @@
 // Message protocol — shared between client and server.
 // ============================================================
 
+import { z } from 'zod';
+import type {
+  Vec3, Quat,
+  InputPayload, EntitySnapshot, WorldSnapshot,
+  TradeGood, MissionDef, PlayerFullState,
+} from '@shared/types.js';
+
+export type { Vec3, Quat, InputPayload, EntitySnapshot, WorldSnapshot, TradeGood, MissionDef, PlayerFullState };
+
 // --- Client → Server ---
 
 export interface AuthMessage {
@@ -44,9 +53,11 @@ export type ClientMessage =
   | InputMessage
   | TradeBuyMessage
   | TradeSellMessage
+  | { type: 'trade_request'; payload: Record<string, never> }
   | MissionAcceptMessage
   | JumpRequestMessage
-  | ChatMessage;
+  | ChatMessage
+  | { type: 'fire_bolt'; payload: { pos: Vec3; dir: Vec3 } };
 
 // --- Server → Client ---
 
@@ -112,74 +123,41 @@ export type ServerMessage =
   | SystemSwitchMessage
   | ErrorMessage;
 
-// --- Shared types ---
+// ── Zod validation schemas ──────────────────────────────────────────
 
-export interface Vec3 { x: number; y: number; z: number; }
-export interface Quat { x: number; y: number; z: number; w: number; }
+const Vec3Schema = z.object({ x: z.number(), y: z.number(), z: z.number() });
+const QuatSchema = z.object({ x: z.number(), y: z.number(), z: z.number(), w: z.number() });
 
-export interface InputPayload {
-  tick: number;
-  throttle: number;
-  boost: boolean;
-  fire: boolean;
-  mine: boolean;
-  torque: Vec3;
-  thrust: Vec3;
-  mode: string;
-  orientation: Quat;
-}
+export const InputPayloadSchema = z.object({
+  tick: z.number(),
+  throttle: z.number().min(0).max(1),
+  boost: z.boolean(),
+  fire: z.boolean(),
+  mine: z.boolean(),
+  torque: Vec3Schema,
+  thrust: Vec3Schema,
+  mode: z.enum(['realistic', 'flight_assist', 'cruise']),
+  orientation: QuatSchema,
+});
 
-export interface EntitySnapshot {
-  id: string;
-  position: Vec3;
-  orientation: Quat;
-  velocity: Vec3;
-  health: number;
-  shield: number;
-  ownerId?: string; // player-owned
-  npcType?: string; // 'pirate' etc
-}
+export const ClientMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('auth'),     payload: z.object({ token: z.string().min(1) }) }),
+  z.object({ type: z.literal('input'),    payload: InputPayloadSchema }),
+  z.object({ type: z.literal('fire_bolt'), payload: z.object({ pos: Vec3Schema, dir: Vec3Schema }) }),
+  z.object({ type: z.literal('trade_buy'),  payload: z.object({ goodId: z.string().min(1), quantity: z.number().int().positive() }) }),
+  z.object({ type: z.literal('trade_sell'), payload: z.object({ goodId: z.string().min(1), quantity: z.number().int().positive() }) }),
+  z.object({ type: z.literal('trade_request'), payload: z.object({}).optional() }),
+  z.object({ type: z.literal('mission_accept'), payload: z.object({ missionId: z.number().int().positive() }) }),
+  z.object({ type: z.literal('jump_request'),  payload: z.object({ targetSystem: z.number().int().min(0) }) }),
+  z.object({ type: z.literal('chat_message'),  payload: z.object({ text: z.string().min(1).max(500) }) }),
+]);
 
-export interface WorldSnapshot {
-  tick: number;
-  timestamp: number;
-  systemSeed: number;
-  entities: EntitySnapshot[];
-  station?: { id: string; position: Vec3 };
-}
+export type ClientMessageValidated = z.infer<typeof ClientMessageSchema>;
 
-export interface TradeGood {
-  id: string;
-  name: string;
-  price: number;
-  playerQty: number;
-  stationQty: number;
-}
-
-export interface MissionDef {
-  id: number;
-  type: 'destroy' | 'deliver';
-  title: string;
-  description: string;
-  reward: number;
-  progress: number;
-  target: number;
-  completed: boolean;
-}
-
-export interface PlayerFullState {
-  playerId: string;
-  username: string;
-  credits: number;
-  cargoUsed: number;
-  cargoMax: number;
-  cargo: TradeGood[];
-  hull: number;
-  shield: number;
-  reputation: Record<string, number>;
-  upgrades: Record<string, number>;
-  missions: MissionDef[];
-  currentSystem: number;
-  position: Vec3;
-  orientation: Quat;
+/** Validate an incoming client message. Returns parsed message or error string. */
+export function validateClientMessage(data: unknown): { ok: true; msg: ClientMessageValidated } | { ok: false; error: string } {
+  const result = ClientMessageSchema.safeParse(data);
+  if (result.success) return { ok: true, msg: result.data };
+  const issues = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+  return { ok: false, error: issues };
 }
