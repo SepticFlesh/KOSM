@@ -160,24 +160,24 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
     }
     (window as any).__kosmRadarBlips = blips;
 
-    // ── Navigator blips (wide range) ──
+    // ── Navigator blips (wide range, mirrored left-right) ──
     const navRange = 200000;
     const navBlips: any[] = [];
 
-    // Star system objects (planets, orbits)
+    // Star system objects (planets, orbits) — X negated for left-right mirror
     try {
       const starSys = engine.getSceneManager().getStarSystem();
       if (starSys) {
-        navBlips.push({ x: -shipPos.x / navRange, y: -shipPos.z / navRange, height: 0, health: 1, type: 'star', r: starSys.getRadius() });
+        navBlips.push({ x: shipPos.x / navRange, y: -shipPos.z / navRange, height: 0, health: 1, type: 'star', r: starSys.getRadius() });
         for (const p of starSys.getPlanets()) {
           const ppos = p.getPosition();
           const prel = pool.get().copy(ppos).sub(shipPos);
           const pdist = prel.length();
           if (pdist < navRange) {
             const orbitR = p.getOrbitRadius();
-            navBlips.push({ x: prel.dot(bRgt) / navRange, y: prel.dot(bFwd) / navRange, height: prel.dot(bUp) / navRange, health: 1, type: 'planet', r: orbitR * 0.05 });
+            navBlips.push({ x: -prel.dot(bRgt) / navRange, y: prel.dot(bFwd) / navRange, height: prel.dot(bUp) / navRange, health: 1, type: 'planet', r: orbitR * 0.05 });
             if (orbitR > 1000) {
-              navBlips.push({ x: -shipPos.x / navRange, y: -shipPos.z / navRange, height: 0, health: 0, type: 'orbit', r: orbitR });
+              navBlips.push({ x: shipPos.x / navRange, y: -shipPos.z / navRange, height: 0, health: 0, type: 'orbit', r: orbitR });
             }
           }
         }
@@ -194,18 +194,18 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
                        (e.npcType || '') === 'transport' || (e.npcType || '') === 'liner';
       const isBase = (e.npcType || '') === 'base';
       navBlips.push({
-        x: Math.max(-1, Math.min(1, rel.dot(bRgt) / navRange)),
+        x: Math.max(-1, Math.min(1, -rel.dot(bRgt) / navRange)),
         y: Math.max(-1, Math.min(1, rel.dot(bFwd) / navRange)),
         height: Math.max(-1, Math.min(1, rel.dot(bUp) / navRange)),
         health: 1,
         type: isBase ? 'station' : isTrader ? 'station' : 'player',
       });
     }
-    // Station on navigator
+    // Station on navigator (X negated for mirror)
     const navSt = engine.getSceneManager().getStation();
     if (navSt) {
       const rel = pool.get().copy(navSt.position).sub(shipPos);
-      navBlips.push({ x: Math.max(-1, Math.min(1, rel.dot(bRgt) / navRange)), y: Math.max(-1, Math.min(1, rel.dot(bFwd) / navRange)), height: Math.max(-1, Math.min(1, rel.dot(bUp) / navRange)), health: 1, type: 'station' });
+      navBlips.push({ x: Math.max(-1, Math.min(1, -rel.dot(bRgt) / navRange)), y: Math.max(-1, Math.min(1, rel.dot(bFwd) / navRange)), height: Math.max(-1, Math.min(1, rel.dot(bUp) / navRange)), health: 1, type: 'station' });
     }
     (window as any).__kosmNavBlips = navBlips;
 
