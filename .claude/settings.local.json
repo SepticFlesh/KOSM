@@ -31,7 +31,9 @@
       "Bash(echo \"JWT_SECRET=$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\"\\)\")",
       "Bash(rm -rf dist)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(ls dist/http/router.js)"
+      "Bash(ls dist/http/router.js)",
+      "Bash(node *)",
+      "Bash(echo \"DEPLOY_TOKEN=kosm-deploy-$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(6\\).toString\\('hex'\\)\\)\"\\)\")"
     ]
   }
 }

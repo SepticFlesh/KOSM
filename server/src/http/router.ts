@@ -73,6 +73,22 @@ export function createRouter(deps: RouterDeps) {
       return;
     }
 
+    // ── Self-restart (POST only, requires deploy token) ──
+    if (url.pathname === '/api/restart' && req.method === 'POST') {
+      const token = (req.headers['x-deploy-token'] as string) || '';
+      const expected = process.env.DEPLOY_TOKEN || '';
+      if (expected && token === expected) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'restarting' }));
+        console.log('[KOSM] Restart triggered via API — exiting in 500ms');
+        setTimeout(() => process.exit(0), 500);
+        return;
+      }
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid deploy token' }));
+      return;
+    }
+
     // ── 404 ──
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));

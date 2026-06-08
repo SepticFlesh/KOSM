@@ -34,6 +34,8 @@ if [ "${1:-}" = "--server" ]; then
   # Upload server
   ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "mkdir -p $SERVER_DIR"
   scp -i "$SSH_KEY" -r server/dist "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
+  # Sync dist/ into dist/server/src/ for hosting panel compatibility
+  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "mkdir -p $SERVER_DIR/dist/server/src && cp -r $SERVER_DIR/dist/* $SERVER_DIR/dist/server/src/ 2>/dev/null || true"
   scp -i "$SSH_KEY" server/package.json "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
   scp -i "$SSH_KEY" server/.env "$SSH_USER@$SSH_HOST:$SERVER_DIR/" 2>/dev/null || echo "(no .env file, skipping)"
 
@@ -47,22 +49,20 @@ if [ "${1:-}" = "--server" ]; then
     rm -rf node_modules
     npm install --production
 
-    # Kill old processes holding port 3001
-    OLD_PID=$(fuser 3001/tcp 2>/dev/null | tr -d ' ')
-    if [ -n "$OLD_PID" ]; then
-      echo "Killing old server PID: $OLD_PID"
-      kill -9 $OLD_PID 2>/dev/null || true
-      sleep 1
+    # Get deploy token from .env
+    DEPLOY_TOKEN=$(grep DEPLOY_TOKEN .env 2>/dev/null | cut -d= -f2)
+    if [ -n "$DEPLOY_TOKEN" ]; then
+      echo "Triggering graceful restart via API..."
+      curl -s -X POST -H "x-deploy-token: $DEPLOY_TOKEN" http://localhost:3001/api/restart || true
+      echo ""
+      echo "Waiting for server to restart..."
+      sleep 4
+      # Verify new server is up
+      curl -s http://localhost:3001/api/health && echo "  → Server restarted OK!" || echo "  → Waiting for hosting to restart..."
+    else
+      echo "WARNING: No DEPLOY_TOKEN found, cannot trigger restart"
+      echo "Please restart manually via BeGet panel"
     fi
-    # Also try pkill as fallback
-    pkill -f "node dist" 2>/dev/null || true
-    sleep 0.5
-
-    # Start new process (with .env loading)
-    nohup node --env-file=.env dist/index.js > server.log 2>&1 &
-    echo "Server restarted, PID: $!"
-    sleep 1
-    cat server.log | tail -3
 REMOTE_SCRIPT
 
   echo "Server deployed!"

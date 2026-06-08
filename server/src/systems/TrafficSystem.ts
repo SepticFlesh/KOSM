@@ -18,7 +18,7 @@ export interface CivilianShip {
   lodSkipCounter: number;
 }
 
-const TRAFFIC_PER_ROUTE = 20; // down from 50-79
+const TRAFFIC_PER_ROUTE = 0; // trade ships disabled
 const LOD_SIM_EVERY_N_TICKS = 4; // simulate distant ships every 4th tick
 
 export class TrafficSystem {
