@@ -4,7 +4,7 @@ import {
   type FlightMode,
   DEFAULT_SHIP_CONFIG,
   NPC_SHIP_CONFIG,
-} from '../../shared/physics.js';
+} from '../../../shared/physics.js';
 
 // Re-export shared types for convenience
 export type { ShipConfig, FlightMode };
