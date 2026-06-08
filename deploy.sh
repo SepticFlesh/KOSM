@@ -42,8 +42,10 @@ if [ "${1:-}" = "--server" ]; then
     cd ~/aiator/server
     npm install --production 2>/dev/null || true
     # Kill old process if running
-    pkill -f "node dist/server/src/index.js" 2>/dev/null || true
+    pkill -f "node dist" 2>/dev/null || true
     # Start new process with nohup
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
     nohup node dist/server/src/index.js > server.log 2>&1 &
     echo "Server restarted, PID: $!"
     sleep 1
