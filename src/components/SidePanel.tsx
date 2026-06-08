@@ -24,7 +24,7 @@ function MapMini({ data }: any) {
   const cosA = Math.cos(-ship.angle), sinA = Math.sin(-ship.angle);
   const proj = (wx:number,wz:number) => {
     const dx=wx-ship.x, dz=wz-ship.z;
-    return {x:cx-(dx*cosA-dz*sinA)*scale, y:cy-(dx*sinA+dz*cosA)*scale};
+    return {x:cx+(dx*cosA-dz*sinA)*scale, y:cy-(dx*sinA+dz*cosA)*scale};
   };
 
   return (

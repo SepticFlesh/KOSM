@@ -26,20 +26,20 @@ function RadarCanvas({ nav }: { nav?: boolean }) {
       ctx.beginPath(); ctx.moveTo(cx-maxR,cy); ctx.lineTo(cx+maxR,cy); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx,cy-maxR); ctx.lineTo(cx,cy+maxR); ctx.stroke();
 
-      // Navigator route lines (mirrored X)
+      // Navigator route lines
       if (nav) {
         const routes = (window as any).__kosmNavRoutes || [];
         for (const r of routes) {
           ctx.strokeStyle = r.color; ctx.lineWidth = 0.3;
           ctx.beginPath();
-          ctx.moveTo(cx - r.x1 * maxR * 0.9, cy - r.y1 * maxR * 0.7);
-          ctx.lineTo(cx - r.x2 * maxR * 0.9, cy - r.y2 * maxR * 0.7);
+          ctx.moveTo(cx + r.x1 * maxR * 0.9, cy - r.y1 * maxR * 0.7);
+          ctx.lineTo(cx + r.x2 * maxR * 0.9, cy - r.y2 * maxR * 0.7);
           ctx.stroke();
         }
       }
 
       for (const b of blips) {
-        const bx = nav ? (cx - b.x * maxR * 0.9) : (cx + b.x * maxR * 0.9);
+        const bx = cx + b.x * maxR * 0.9;
         const by = cy - b.y * maxR * 0.7;
         const stem = (b.height||0) * maxR * 0.4, sy = by + stem;
         const isSt = b.type === 'station';
