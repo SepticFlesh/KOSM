@@ -28,7 +28,10 @@
       "Bash(bash *)",
       "Bash(python3 -m json.tool)",
       "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
-      "Bash(echo \"JWT_SECRET=$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\"\\)\")"
+      "Bash(echo \"JWT_SECRET=$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\"\\)\")",
+      "Bash(rm -rf dist)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(ls dist/http/router.js)"
     ]
   }
 }

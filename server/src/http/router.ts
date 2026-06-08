@@ -24,11 +24,13 @@ export function createRouter(deps: RouterDeps) {
     // ── Health check ──
     if (url.pathname === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      let memory: string | undefined;
+      try { memory = Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB'; } catch { /* restricted */ }
       res.end(JSON.stringify({
         status: 'ok',
         uptime: process.uptime(),
         players: deps.playerCount(),
-        memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+        ...(memory ? { memory } : {}),
       }));
       return;
     }
