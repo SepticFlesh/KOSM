@@ -35,7 +35,7 @@ export function SystemMapOverlay() {
           const dx = wx - shipX, dz = wz - shipZ;
           const rx = (dx * cosA - dz * sinA) * scale;
           const ry = (dx * sinA + dz * cosA) * scale;
-          return { x: cx + ry, y: cy - rx };
+          return { x: cx + ry, y: cy + rx };
         };
 
         if (svgRef.current) {
@@ -68,7 +68,7 @@ export function SystemMapOverlay() {
             html += `<div style="position:absolute;left:${p.x - s / 2}px;top:${p.y - s / 2}px;width:${s}px;height:${s}px;background:${c};"></div>`;
           }
 
-          html += `<div style="position:absolute;left:${cx - 5}px;top:${cy - 7}px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #fff;"></div>`;
+          html += `<div style="position:absolute;left:${cx - 5}px;top:${cy - 2}px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:9px solid #fff;"></div>`;
           html += `<div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:8px;color:rgba(68,170,255,0.4);font-family:monospace;">200K</div>`;
           dotsRef.current.innerHTML = html;
         }
