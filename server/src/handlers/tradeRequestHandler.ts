@@ -1,7 +1,7 @@
 import type { ServerMessage, MissionDef } from '../protocol/messages.js';
 import type { EconomySystem } from '../systems/EconomySystem.js';
 import type { ServerMissionSystem } from '../systems/MissionSystem.js';
-import { getPlayer, getPlayerCargo } from '../db.js';
+import { getPlayer, getPlayerCargo, type CargoRow } from '../db.js';
 
 export interface TradeRequestHandlerDeps {
   economy: EconomySystem;
@@ -23,7 +23,7 @@ export function createTradeRequestHandler(deps: TradeRequestHandlerDeps) {
 
     const player = getPlayer(playerId);
     if (!player) return;
-    const cargo = getPlayerCargo(playerId);
+    const cargo = getPlayerCargo(playerId).map(r => ({ goodId: r.good_id, quantity: r.quantity }));
     const market = economy.getMarket(systemSeed, cargo);
 
     broadcast({ type: 'trade_menu', payload: { goods: market.goods, credits: player.credits } });

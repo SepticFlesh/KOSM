@@ -14,6 +14,11 @@ export interface TradeHandlerDeps {
 
 type ReplyFn = (msg: ServerMessage) => void;
 
+/** Map DB cargo rows (good_id) to economy market format (goodId) */
+function toMarketCargo(rows: CargoRow[]): Array<{ goodId: string; quantity: number }> {
+  return rows.map(r => ({ goodId: r.good_id, quantity: r.quantity }));
+}
+
 export function createTradeHandler(deps: TradeHandlerDeps) {
   const { economy, getPlayerSystem } = deps;
 
@@ -39,7 +44,7 @@ export function createTradeHandler(deps: TradeHandlerDeps) {
       ? {
           type: 'trade_menu',
           payload: {
-            goods: economy.getMarket(getPlayerSystem(session.playerId), getPlayerCargo(session.playerId)).goods,
+            goods: economy.getMarket(getPlayerSystem(session.playerId), toMarketCargo(getPlayerCargo(session.playerId))).goods,
             credits: result.newCredits!,
           },
         }
@@ -73,7 +78,7 @@ export function createTradeHandler(deps: TradeHandlerDeps) {
       ? {
           type: 'trade_menu',
           payload: {
-            goods: economy.getMarket(getPlayerSystem(session.playerId), getPlayerCargo(session.playerId)).goods,
+            goods: economy.getMarket(getPlayerSystem(session.playerId), toMarketCargo(getPlayerCargo(session.playerId))).goods,
             credits: result.newCredits!,
           },
         }
