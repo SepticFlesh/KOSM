@@ -6,7 +6,6 @@ import { attachMultiplayer, startMPHUDSync, type MPContext } from '../modes/Mult
 import { WSClient } from '../network/wsClient';
 import { ChatPanel } from './ChatPanel';
 import { LoginScreen } from './LoginScreen';
-import { SystemMapOverlay } from './SystemMapOverlay';
 import { PlayerList, type PlayerInfo } from './PlayerList';
 import { soundManager } from '../audio/SoundManager';
 import { loadGame } from '../utils/saveLoad';
@@ -326,7 +325,6 @@ export function MPGameView({ mobile }: { mobile?: boolean }) {
       )}
       {overlay}
       <PlayerList players={playerList} visible={authState === 'authenticated'} />
-      <SystemMapOverlay visible={authState === 'authenticated'} />
       <ChatPanel
         messages={chatMessages}
         onSend={(text) => wsRef.current?.send({ type: 'chat_message', payload: { text } })}
