@@ -7,7 +7,7 @@ import type {
   Vec3, Quat,
   InputPayload, EntitySnapshot, WorldSnapshot,
   TradeGood, MissionDef, PlayerFullState,
-} from '@shared/types.js';
+} from '../../shared/types.js';
 
 export type { Vec3, Quat, InputPayload, EntitySnapshot, WorldSnapshot, TradeGood, MissionDef, PlayerFullState };
 
