@@ -39,13 +39,19 @@ if [ "${1:-}" = "--server" ]; then
 
   # Install deps and restart on server
   ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" << 'REMOTE_SCRIPT'
+    # Load Node.js via nvm (shared hosting)
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
     cd ~/aiator/server
-    rm -rf node_modules && npm install --production
+    rm -rf node_modules
+    npm install --production
+
     # Kill old process if running
     pkill -f "node dist" 2>/dev/null || true
-    # Start new process with nohup
-    export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    sleep 0.5
+
+    # Start new process
     nohup node dist/server/src/index.js > server.log 2>&1 &
     echo "Server restarted, PID: $!"
     sleep 1
