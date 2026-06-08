@@ -47,7 +47,14 @@ if [ "${1:-}" = "--server" ]; then
     rm -rf node_modules
     npm install --production
 
-    # Kill old process if running
+    # Kill old processes holding port 3001
+    OLD_PID=$(fuser 3001/tcp 2>/dev/null | tr -d ' ')
+    if [ -n "$OLD_PID" ]; then
+      echo "Killing old server PID: $OLD_PID"
+      kill -9 $OLD_PID 2>/dev/null || true
+      sleep 1
+    fi
+    # Also try pkill as fallback
     pkill -f "node dist" 2>/dev/null || true
     sleep 0.5
 
