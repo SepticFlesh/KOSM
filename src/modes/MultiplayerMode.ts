@@ -77,6 +77,7 @@ export function attachMultiplayer(
         // Cache for radar/map
         (window as any).__kosmMPEntities = snap.entities.filter(e => e.id !== playerId).map(e => ({ id:e.id, px:e.position.x, py:e.position.y, pz:e.position.z, health:e.health, isNPC:!e.ownerId, isPlayer:!!e.ownerId, npcType:(e as any).npcType||'enemy' }));
         (window as any).__kosmRoutes = (snap as any).routes || [];
+        (window as any).__kosmNavRoutes = (snap as any).routes || [];
         // Reconcile local player
         const myState = inputSync.getPlayerState(playerId, snap);
         if (myState) {
