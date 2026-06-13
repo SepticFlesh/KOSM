@@ -31,11 +31,9 @@ if [ "${1:-}" = "--server" ]; then
   npx tsc
   cd ..
 
-  # Upload server
-  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "mkdir -p $SERVER_DIR"
+  # Upload server — wipe old dist first to remove stale files
+  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "rm -rf $SERVER_DIR/dist && mkdir -p $SERVER_DIR"
   scp -i "$SSH_KEY" -r server/dist "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
-  # Sync dist/ into dist/server/src/ for hosting panel compatibility
-  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "mkdir -p $SERVER_DIR/dist/server/src && cp -r $SERVER_DIR/dist/* $SERVER_DIR/dist/server/src/ 2>/dev/null || true"
   scp -i "$SSH_KEY" server/package.json "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
   scp -i "$SSH_KEY" server/.env "$SSH_USER@$SSH_HOST:$SERVER_DIR/" 2>/dev/null || echo "(no .env file, skipping)"
 
