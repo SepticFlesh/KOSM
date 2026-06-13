@@ -17,7 +17,7 @@ function MapMini({ data }: any) {
     return () => clearInterval(iv);
   }, [data]);
 
-  const size = 280, range = 2000000;
+  const size = 280, range = 200000;
   const scale = (size/2)/range;
   const cx = size/2, cy = size/2;
   const {ship, ents, routes} = mapState;

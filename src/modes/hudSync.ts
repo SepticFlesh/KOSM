@@ -127,7 +127,7 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
     const entities = getEntities();
 
     // ── Radar blips (close range) ──
-    const blipRange = source === 'sp' ? 800000 : 5000;
+    const blipRange = source === 'sp' ? 80000 : 500;
     const blips: Array<{ x: number; y: number; height: number; health: number; type: 'enemy' | 'station' | 'player' }> = [];
     for (const e of entities) {
       if (e.type === 'star' || e.type === 'planet' || e.type === 'orbit') continue;
@@ -161,7 +161,7 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
     (window as any).__kosmRadarBlips = blips;
 
     // ── Navigator blips (wide range, mirrored left-right) ──
-    const navRange = 2000000;
+    const navRange = 200000;
     const navBlips: any[] = [];
 
     // Star system objects — X negated for left-right mirror
@@ -273,7 +273,7 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
         isPlayer: true,
         angle: Math.atan2(fwd.x, fwd.z),
       });
-      gameState.setMapData({ objects: mapObjects, range: source === 'sp' ? 1500000 : 2000000 });
+      gameState.setMapData({ objects: mapObjects, range: source === 'sp' ? 150000 : 200000 });
     }
 
     // Release all borrowed vectors back to pool

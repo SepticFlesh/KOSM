@@ -33,23 +33,7 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(ls dist/http/router.js)",
       "Bash(node *)",
-      "Bash(echo \"DEPLOY_TOKEN=kosm-deploy-$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(6\\).toString\\('hex'\\)\\)\"\\)\")",
-      "Bash(grep -E '[0-9]{3,}')",
-      "Bash(sed -i '' 's/Vector3\\(600, 50, -400\\)/Vector3\\(6000, 500, -4000\\)/g' src/game/bootstrap.ts)",
-      "Bash(sed -i '' 's/Vector3\\(1600, 80, -400\\)/Vector3\\(16000, 800, -4000\\)/g' src/game/bootstrap.ts)",
-      "Bash(sed -i '' 's/Vector3\\(200, 50, -100\\)/Vector3\\(2000, 500, -1000\\)/g' src/engine/SceneManager.ts)",
-      "Bash(sed -i '' 's/Vector3\\(600, 250, -800\\)/Vector3\\(6000, 2500, -8000\\)/g' src/engine/SceneManager.ts)",
-      "Bash(sed -i '' 's/pos.z += 200000/pos.z += 2000000/g' src/engine/SceneManager.ts)",
-      "Bash(sed -i '' \"s/source === .sp. ? 800000/source === 'sp' ? 800000/g\" src/modes/hudSync.ts)",
-      "Bash(sed -i '' 's/Vector3\\(1600, 80, -400\\)/Vector3\\(16000, 800, -4000\\)/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/Vector3\\(600, 250, -800\\)/Vector3\\(6000, 2500, -8000\\)/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/Vector3\\(600, 50, -400\\)/Vector3\\(6000, 500, -4000\\)/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/600 + \\(Math/6000 + \\(Math/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/dist = 200 + Math.random\\(\\) \\\\* 300/dist = 2000 + Math.random\\(\\) * 3000/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/600 + Math.cos/6000 + Math.cos/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/-800 + Math.sin/-8000 + Math.sin/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/2500 + \\(Math.random\\(\\) - 0.5\\) \\\\* 100/2500 + \\(Math.random\\(\\) - 0.5\\) * 1000/g' server/src/gameLoop.ts)",
-      "Bash(sed -i '' 's/x: 600, y: 250, z: -800/x: 6000, y: 2500, z: -8000/g' server/src/gameLoop.ts)"
+      "Bash(echo \"DEPLOY_TOKEN=kosm-deploy-$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(6\\).toString\\('hex'\\)\\)\"\\)\")"
     ]
   }
 }

@@ -108,7 +108,7 @@ export class SceneManager {
 
   spawnAsteroids(count: number = 12): void {
     if (!this.mining) this.mining = new MiningSystem(this.scene);
-    this.mining.spawn(count, new THREE.Vector3(0, 0, 0), 3000000);
+    this.mining.spawn(count, new THREE.Vector3(0, 0, 0), 300000);
   }
 
   createStation(pos: THREE.Vector3): SpaceStation {
@@ -235,7 +235,7 @@ export class SceneManager {
   private checkPlayerDamage(): void {
     if (!this.playerShip) return;
     const playerPos = this.playerShip.flightModel.state.position;
-    const BOLT_HIT_RADIUS = 15;
+    const BOLT_HIT_RADIUS = 1.5;
 
     // Collect all enemy bolts with their owner
     interface BoltRef { bolt: EnemyShip['enemyBolts'][0]; enemy: EnemyShip }
@@ -274,7 +274,7 @@ export class SceneManager {
 
   mineAsteroid(playerPos: THREE.Vector3, dt: number): { destroyed: boolean; ore?: number; type?: string } {
     if (!this.mining) return { destroyed: false };
-    const a = this.mining.findNearest(playerPos, 2000);
+    const a = this.mining.findNearest(playerPos, 200);
     if (!a) return { destroyed: false };
     a.health -= 30 * dt;
     (a.mesh.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x440000);
@@ -301,7 +301,7 @@ export class SceneManager {
     // Place ship 200000 units further out
     const pos = playerShip.flightModel.state.position;
     const targetPos = pos.clone();
-    pos.z += 2000000;
+    pos.z += 200000;
     playerShip.flightModel.reset(pos);
     const startPos = pos.clone();
     const warpDuration = 5.0;
@@ -349,11 +349,11 @@ export class SceneManager {
 
     // Create new system
     this.createStarSystem(seed);
-    this.createStation(new THREE.Vector3(2000, 500, -1000));
+    this.createStation(new THREE.Vector3(200, 50, -100));
     this.spawnEnemies(4);
     this.spawnAsteroids(15);
 
     // Reset player position
-    playerShip.flightModel.reset(new THREE.Vector3(6000, 2500, -8000));
+    playerShip.flightModel.reset(new THREE.Vector3(600, 250, -800));
   }
 }

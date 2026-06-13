@@ -811,7 +811,7 @@ export class ShipController {
     const gunWorld = gunLocal.applyQuaternion(this.flightModel.state.orientation).add(shipPos);
     const dir = target.clone().sub(gunWorld);
     const dist = dir.length();
-    if (dist < 1 || dist > 2000) {
+    if (dist < 1 || dist > 200) {
       this.mineBeam.visible = false;
       if (outerBeam) outerBeam.visible = false;
       return;
