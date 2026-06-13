@@ -50,7 +50,7 @@ function RadarCanvas({ nav }: { nav?: boolean }) {
               ctx.beginPath(); ctx.arc(bx, by, or, 0, Math.PI*2); ctx.stroke();
             }
           } else {
-            ctx.fillStyle = isSt ? '#4f4' : isPlayer ? '#48f' : '#fa0';
+            ctx.fillStyle = isSt ? '#4f4' : isPlayer ? '#48f' : '#f44';
             ctx.fillRect(bx - 0.5, by - 0.5, 1, 1);
           }
         } else {
