@@ -69,18 +69,26 @@ function RadarCanvas({ nav }: { nav?: boolean }) {
       ctx.strokeStyle = 'rgba(68,170,255,0.4)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(cx, cy, maxR, 0, Math.PI*2); ctx.stroke();
 
-      // Debug: count by type
+      // Debug: count by type and npcType
       if (nav) {
         const counts: Record<string, number> = {};
+        const npcCounts: Record<string, number> = {};
         for (const b of blips) {
           const t = (b as any).type || b.type || '?';
           counts[t] = (counts[t] || 0) + 1;
+          const nt = (b as any).npcType;
+          if (nt) { const k = `${t}/${nt}`; npcCounts[k] = (npcCounts[k] || 0) + 1; }
         }
         const parts: string[] = [];
         for (const [t, n] of Object.entries(counts)) parts.push(`${t}:${n}`);
+        parts.push('');
+        for (const [t, n] of Object.entries(npcCounts)) parts.push(`${t}:${n}`);
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = '8px monospace';
-        ctx.fillText(parts.join(' '), 4, size - 4);
+        ctx.font = '7px monospace';
+        const lines = parts.join(' ').match(/.{1,45}/g) || [];
+        for (let li = 0; li < Math.min(lines.length, 3); li++) {
+          ctx.fillText(lines[li], 4, size - 16 + li * 9);
+        }
       }
 
       requestAnimationFrame(draw);

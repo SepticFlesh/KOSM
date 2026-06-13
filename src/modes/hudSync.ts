@@ -200,6 +200,7 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
         height: Math.max(-1, Math.min(1, rel.dot(bUp) / Math.max(dist, 0.01) * scale)),
         health: 1,
         type: e.isPlayer ? 'player' : 'enemy',
+        npcType: e.npcType,
       });
     }
     (window as any).__kosmNavBlips = navBlips;
