@@ -193,22 +193,13 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
       const rel = pool.get().copy(wpos).sub(shipPos);
       const dist = rel.length();
       if (dist > navRange) continue;
-      const isTrader = (e.npcType || '') === 'trader' || (e.npcType || '') === 'shuttle' ||
-                       (e.npcType || '') === 'transport' || (e.npcType || '') === 'liner';
-      const isBase = (e.npcType || '') === 'base';
       navBlips.push({
         x: Math.max(-1, Math.min(1, -rel.dot(bRgt) / navRange)),
         y: Math.max(-1, Math.min(1, rel.dot(bFwd) / navRange)),
         height: Math.max(-1, Math.min(1, rel.dot(bUp) / navRange)),
         health: 1,
-        type: isBase ? 'station' : isTrader ? 'station' : 'player',
+        type: e.isPlayer ? 'player' : 'enemy',
       });
-    }
-    // Station on navigator (X negated for mirror)
-    const navSt = engine.getSceneManager().getStation();
-    if (navSt) {
-      const rel = pool.get().copy(navSt.position).sub(shipPos);
-      navBlips.push({ x: Math.max(-1, Math.min(1, -rel.dot(bRgt) / navRange)), y: Math.max(-1, Math.min(1, rel.dot(bFwd) / navRange)), height: Math.max(-1, Math.min(1, rel.dot(bUp) / navRange)), health: 1, type: 'station' });
     }
     (window as any).__kosmNavBlips = navBlips;
 
@@ -261,11 +252,10 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
       if (mst) mapObjects.push({ x: mst.position.x, z: mst.position.z, r: 4, color: '#4f4', label: 'Station' });
       for (const e of entities) {
         if (e.type === 'star' || e.type === 'planet' || e.type === 'orbit') continue;
-        const t = (e.npcType || '');
         mapObjects.push({
           x: e.px, z: e.pz, y: e.py,
-          r: t === 'base' ? 5 : t === 'trader' ? 2.5 : 2,
-          color: t === 'base' ? '#4f4' : (t === 'trader' || t === 'shuttle') ? '#fa0' : e.isPlayer ? '#48f' : '#f44',
+          r: 2,
+          color: e.isPlayer ? '#48f' : '#f44',
         });
       }
       mapObjects.push({
