@@ -193,10 +193,11 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
       const rel = pool.get().copy(wpos).sub(shipPos);
       const dist = rel.length();
       if (dist > navRange) continue;
+      const scale = Math.min(dist / navRange, 1.0);
       navBlips.push({
-        x: Math.max(-1, Math.min(1, -rel.dot(bRgt) / navRange)),
-        y: Math.max(-1, Math.min(1, rel.dot(bFwd) / navRange)),
-        height: Math.max(-1, Math.min(1, rel.dot(bUp) / navRange)),
+        x: Math.max(-1, Math.min(1, -rel.dot(bRgt) / Math.max(dist, 0.01) * scale)),
+        y: Math.max(-1, Math.min(1, rel.dot(bFwd) / Math.max(dist, 0.01) * scale)),
+        height: Math.max(-1, Math.min(1, rel.dot(bUp) / Math.max(dist, 0.01) * scale)),
         health: 1,
         type: e.isPlayer ? 'player' : 'enemy',
       });
