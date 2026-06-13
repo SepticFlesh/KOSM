@@ -164,11 +164,13 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
     const navRange = 200000;
     const navBlips: any[] = [];
 
-    // Star system objects (planets, orbits) — X negated for left-right mirror
+    // Star system objects — X negated for left-right mirror
     try {
       const starSys = engine.getSceneManager().getStarSystem();
       if (starSys) {
-        navBlips.push({ x: shipPos.x / navRange, y: -shipPos.z / navRange, height: 0, health: 1, type: 'star', r: starSys.getRadius() });
+        const starPos = starSys.getStarPosition();
+        const starRel = pool.get(starPos.x, starPos.y, starPos.z).sub(shipPos);
+        navBlips.push({ x: -starRel.dot(bRgt) / navRange, y: starRel.dot(bFwd) / navRange, height: starRel.dot(bUp) / navRange, health: 1, type: 'star', r: starSys.getRadius() });
         for (const p of starSys.getPlanets()) {
           const ppos = p.getPosition();
           const prel = pool.get().copy(ppos).sub(shipPos);
@@ -177,7 +179,8 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
             const orbitR = p.getOrbitRadius();
             navBlips.push({ x: -prel.dot(bRgt) / navRange, y: prel.dot(bFwd) / navRange, height: prel.dot(bUp) / navRange, health: 1, type: 'planet', r: orbitR * 0.05 });
             if (orbitR > 1000) {
-              navBlips.push({ x: shipPos.x / navRange, y: -shipPos.z / navRange, height: 0, health: 0, type: 'orbit', r: orbitR });
+              const orbitRel = pool.get(starPos.x, starPos.y, starPos.z).sub(shipPos);
+              navBlips.push({ x: -orbitRel.dot(bRgt) / navRange, y: orbitRel.dot(bFwd) / navRange, height: 0, health: 0, type: 'orbit', r: orbitR });
             }
           }
         }
