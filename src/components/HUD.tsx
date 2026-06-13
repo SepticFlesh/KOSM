@@ -68,6 +68,21 @@ function RadarCanvas({ nav }: { nav?: boolean }) {
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI*2); ctx.fill();
       ctx.strokeStyle = 'rgba(68,170,255,0.4)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(cx, cy, maxR, 0, Math.PI*2); ctx.stroke();
+
+      // Debug: count by type
+      if (nav) {
+        const counts: Record<string, number> = {};
+        for (const b of blips) {
+          const t = (b as any).type || b.type || '?';
+          counts[t] = (counts[t] || 0) + 1;
+        }
+        const parts: string[] = [];
+        for (const [t, n] of Object.entries(counts)) parts.push(`${t}:${n}`);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '8px monospace';
+        ctx.fillText(parts.join(' '), 4, size - 4);
+      }
+
       requestAnimationFrame(draw);
     };
     draw();
