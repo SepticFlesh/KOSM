@@ -12,8 +12,8 @@ export class StarSystem {
   private planets: Planet[] = [];
   private orbitLines: THREE.Line[] = [];
 
-  // Масштаб: внешняя планета ~100 000 ед от звезды
-  private systemRadius = 110000;
+  // Масштаб: внешняя планета ~1 000 000 ед от звезды
+  private systemRadius = 1100000;
 
   constructor(scene: THREE.Scene, seed: number = 42) {
     this.scene = scene;
@@ -29,7 +29,7 @@ export class StarSystem {
   }
 
   private createStar(): void {
-    const starRadius = 8000 + this.rng.next() * 4000;
+    const starRadius = 80000 + this.rng.next() * 40000;
     const geometry = new THREE.SphereGeometry(starRadius, 64, 64);
     const hue = 0.08 + this.rng.next() * 0.12;
     const starColor = new THREE.Color().setHSL(hue, 0.9, 0.8);
@@ -59,7 +59,7 @@ export class StarSystem {
     // Exponential spacing: closer planets bunched, far ones spread out
     for (let i = 0; i < count; i++) {
       const t = i / (count - 1); // 0..1
-      const orbitRadius = 80000 + Math.pow(t, 1.5) * 500000; // inner~80K, outer~580K
+      const orbitRadius = 800000 + Math.pow(t, 1.5) * 5000000; // inner~800K, outer~5.8M
       const planetSeed = this.rng.nextInt();
       const planet = new Planet(this.scene, planetSeed, orbitRadius, i);
       planet.generate();

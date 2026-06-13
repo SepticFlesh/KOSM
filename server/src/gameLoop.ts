@@ -47,7 +47,7 @@ export class GameLoop {
   addPlayer(session: PlayerSession): void {
     const ship = new ShipEntity(DEFAULT_CONFIG);
     ship.playerControlled = true; // rotation is client-authoritative
-    ship.reset(new Vector3(1600, 80, -400));
+    ship.reset(new Vector3(16000, 800, -4000));
     this.players.set(session.playerId, {
       session,
       ship,
@@ -69,8 +69,8 @@ export class GameLoop {
     if (!entry) return;
     const origin = new Vector3(payload.pos.x, payload.pos.y, payload.pos.z);
     const dir = new Vector3(payload.dir.x, payload.dir.y, payload.dir.z).normalize();
-    const BOLT_RANGE = 1000;
-    const HIT_RADIUS = 5;
+    const BOLT_RANGE = 10000;
+    const HIT_RADIUS = 50;
 
     let bestDist = Infinity;
     let bestNpc: NPCEntry | null = null;
@@ -99,9 +99,9 @@ export class GameLoop {
         // Respawn after 5 seconds
         setTimeout(() => {
           bestNpc!.ship.reset(new Vector3(
-            600 + (Math.random() - 0.5) * 500,
-            250 + (Math.random() - 0.5) * 200,
-            -800 + (Math.random() - 0.5) * 500,
+            6000 + (Math.random() - 0.5) * 500,
+            2500 + (Math.random() - 0.5) * 2000,
+            -8000 + (Math.random() - 0.5) * 500,
           ));
           (bestNpc as any)._dead = false;
         }, 3000);
@@ -126,13 +126,13 @@ export class GameLoop {
     const entry = this.players.get(session.playerId);
     if (!entry) return;
     entry.currentSystem = targetSystem;
-    entry.ship.reset(new Vector3(600, 250, -800));
+    entry.ship.reset(new Vector3(6000, 2500, -8000));
     if (this.broadcastFn) {
       this.broadcastFn({
         type: 'system_switch',
         payload: {
           systemSeed: targetSystem,
-          position: { x: 600, y: 250, z: -800 },
+          position: { x: 6000, y: 2500, z: -8000 },
         },
       });
     }
@@ -148,11 +148,11 @@ export class GameLoop {
         maxSpeedAssist: 250,
       });
       const angle = (i / 4) * Math.PI * 2;
-      const dist = 200 + Math.random() * 300;
+      const dist = 2000 + Math.random() * 3000;
       ship.reset(new Vector3(
-        600 + Math.cos(angle) * dist,
-        250 + (Math.random() - 0.5) * 100,
-        -800 + Math.sin(angle) * dist
+        6000 + Math.cos(angle) * dist,
+        2500 + (Math.random() - 0.5) * 1000,
+        -8000 + Math.sin(angle) * dist
       ));
       this.npcs.set(id, {
         id,
@@ -161,9 +161,9 @@ export class GameLoop {
         aiState: 'patrol',
         aiTimer: 4 + Math.random() * 6,
         patrolTarget: new Vector3(
-          600 + (Math.random() - 0.5) * 2000,
-          250 + (Math.random() - 0.5) * 800,
-          -800 + (Math.random() - 0.5) * 2000,
+          6000 + (Math.random() - 0.5) * 20000,
+          2500 + (Math.random() - 0.5) * 8000,
+          -8000 + (Math.random() - 0.5) * 20000,
         ),
       });
     }
@@ -227,7 +227,7 @@ export class GameLoop {
 
       npc.aiTimer -= TICK_DT;
 
-      if (nearestPlayer && nearestDist < 200) {
+      if (nearestPlayer && nearestDist < 20000) {
         npc.aiState = 'attack';
         // Steer toward player
         const toPlayer = nearestPlayer.ship.state.position.clone()
@@ -248,7 +248,7 @@ export class GameLoop {
           Math.max(-1, Math.min(1, toPlayer.dot(right) * 3)),
           0,
         ));
-      } else if (nearestPlayer && nearestDist < 2000) {
+      } else if (nearestPlayer && nearestDist < 20000) {
         npc.aiState = 'chase';
         const toPlayer = nearestPlayer.ship.state.position.clone()
           .sub(npc.ship.state.position).normalize();
@@ -264,9 +264,9 @@ export class GameLoop {
         if (npc.aiTimer <= 0) {
           npc.aiTimer = 4 + Math.random() * 6;
           npc.patrolTarget.set(
-            npc.ship.state.position.x + (Math.random() - 0.5) * 2000,
-            npc.ship.state.position.y + (Math.random() - 0.5) * 800,
-            npc.ship.state.position.z + (Math.random() - 0.5) * 2000,
+            npc.ship.state.position.x + (Math.random() - 0.5) * 20000,
+            npc.ship.state.position.y + (Math.random() - 0.5) * 8000,
+            npc.ship.state.position.z + (Math.random() - 0.5) * 20000,
           );
         }
         const toPatrol = npc.patrolTarget.clone()
@@ -290,7 +290,7 @@ export class GameLoop {
         const dist = player.ship.state.position.distanceTo(npc.ship.state.position);
 
         // NPC weapon hit player (if NPC is attacking and in range)
-        if (dist < 200 && npc.aiState === 'attack' && Math.random() < 0.1 * TICK_DT * 20) {
+        if (dist < 2000 && npc.aiState === 'attack' && Math.random() < 0.1 * TICK_DT * 20) {
           if (player.ship.state.shield > 0) {
             player.ship.state.shield = Math.max(0, player.ship.state.shield - 5 * TICK_DT);
           } else {
@@ -349,7 +349,7 @@ export class GameLoop {
         timestamp: Date.now(),
         systemSeed: 0,
         entities,
-        station: { id: 'station_0', position: { x: 600, y: 50, z: -400 } },
+        station: { id: 'station_0', position: { x: 6000, y: 500, z: -4000 } },
       };
 
       this.broadcastFn({ type: 'world_snapshot', payload: snapshot });

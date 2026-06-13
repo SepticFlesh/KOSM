@@ -8,7 +8,7 @@ export function SystemMapOverlay() {
   useEffect(() => {
     if (runningRef.current) return;
     runningRef.current = true;
-    const size = 220, range = 200000;
+    const size = 220, range = 2000000;
     const scale = (size / 2) / range;
     const cx = size / 2, cy = size / 2;
 

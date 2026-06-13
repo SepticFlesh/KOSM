@@ -40,7 +40,7 @@ export async function initSharedGame(
 
   // Star system, station, asteroids
   sceneManager.createStarSystem(currentSys.seed);
-  sceneManager.createStation(new THREE.Vector3(600, 50, -400));
+  sceneManager.createStation(new THREE.Vector3(6000, 500, -4000));
   sceneManager.spawnAsteroids(30);
 
   // Player ship
@@ -94,7 +94,7 @@ export async function initSharedGame(
   soundManager.startEngine();
 
   // Position the ship
-  playerShip.flightModel.reset(new THREE.Vector3(1600, 80, -400));
+  playerShip.flightModel.reset(new THREE.Vector3(16000, 800, -4000));
 
   console.log('[KOSM] Shared game ready.');
 

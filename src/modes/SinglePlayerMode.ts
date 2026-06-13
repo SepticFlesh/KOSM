@@ -57,7 +57,7 @@ export function attachSinglePlayer(
   playerShip.onMineRequest = () => {
     const mining = sceneManager.mining;
     if (mining) {
-      const nearest = mining.findNearest(playerShip.flightModel.state.position, 200);
+      const nearest = mining.findNearest(playerShip.flightModel.state.position, 2000);
       playerShip.mineBeamTarget = nearest ? nearest.position : null;
     }
     const result = sceneManager.mineAsteroid(
@@ -87,7 +87,7 @@ export function attachSinglePlayer(
     const station = sceneManager.getStation();
     if (!station) return;
     const dist = playerShip.flightModel.state.position.distanceTo(station.position);
-    if (dist < 15000) {
+    if (dist < 150000) {
       if (gameState.tradeOpen) {
         gameState.closeTrade();
       } else {
