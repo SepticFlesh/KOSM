@@ -39,24 +39,16 @@ export function attachMultiplayer(
   let fireActive = false;
   let mineActive = false;
 
-  // Weapon fire → spawn local bolt + notify server
-  const origFire = playerShip.weaponSystem.fire.bind(playerShip.weaponSystem);
-  playerShip.weaponSystem.fire = function (shipPos: THREE.Vector3, shipQuat: THREE.Quaternion) {
-    try {
-      const wasOnCooldown = playerShip.weaponSystem.cooldownRemaining > 0;
-      origFire(shipPos, shipQuat);
-      // Only send to server if a bolt was actually spawned (not on cooldown)
-      if (!wasOnCooldown && ws.connected) {
-        const f = new THREE.Vector3(0, 0, 1).applyQuaternion(shipQuat);
-        const p = shipPos.clone().add(f.clone().multiplyScalar(2));
-        ws.send({
-          type: 'fire_bolt',
-          payload: { pos: { x: p.x, y: p.y, z: p.z }, dir: { x: f.x, y: f.y, z: f.z } },
-        });
-      }
-    } catch (err) {
-      console.error('[MP] Fire error:', err);
-    }
+  // Weapon fire → notify server via callback (no monkey-patching)
+  playerShip.onFire = (muzzlePos: THREE.Vector3, dir: THREE.Vector3) => {
+    if (!ws.connected) return;
+    ws.send({
+      type: 'fire_bolt',
+      payload: {
+        pos: { x: muzzlePos.x, y: muzzlePos.y, z: muzzlePos.z },
+        dir: { x: dir.x, y: dir.y, z: dir.z },
+      },
+    });
   };
 
   // FTL Jump — send to server

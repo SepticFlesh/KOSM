@@ -518,7 +518,13 @@ export class ShipController {
     // ── Огонь ──
     const touchFiring = this.getTouchFiring ? this.getTouchFiring() : false;
     if ((C.fireMouse >= 0 && inp.isPointerLockedState() && inp.isMouseDown(C.fireMouse)) || this.anyKey(C.fire) || touchFiring) {
+      const wasOnCooldown = this.weaponSystem.cooldownRemaining > 0;
       this.weaponSystem.fire(fm.state.position, fm.state.orientation);
+      if (!wasOnCooldown && this.onFire) {
+        const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(fm.state.orientation);
+        const muzzle = fm.state.position.clone().add(fwd.clone().multiplyScalar(2));
+        this.onFire(muzzle, fwd);
+      }
     }
 
     // ── Торговля ──
@@ -612,6 +618,8 @@ export class ShipController {
   public onTradeRequest: (() => void) | null = null;
   public onJumpRequest: (() => void) | null = null;
   public onMineRequest: (() => void) | null = null;
+  /** Called when a bolt is actually fired (past cooldown). MP mode hooks this for server sync. */
+  public onFire: ((pos: THREE.Vector3, dir: THREE.Vector3) => void) | null = null;
 
   // Touch control interface (set by GameCanvas)
   getTouchThrottle?: () => number;
