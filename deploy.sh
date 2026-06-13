@@ -8,9 +8,10 @@ set -euo pipefail
 SSH_KEY="$HOME/.ssh/id_ed25519"
 SSH_USER="dissemab"
 SSH_HOST="aiator.ru"
+ROOT_HOST="83.222.16.124"
 REMOTE_ROOT="~/aiator"
 PUBLIC_HTML="$REMOTE_ROOT/public_html"
-SERVER_DIR="$REMOTE_ROOT/server"
+SERVER_DIR="/opt/kosm-server"
 
 echo "=== AIATOR Deploy ==="
 
@@ -31,28 +32,24 @@ if [ "${1:-}" = "--server" ]; then
   npx tsc
   cd ..
 
-  # Upload server — wipe old dist first to remove stale files
-  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "rm -rf $SERVER_DIR/dist && mkdir -p $SERVER_DIR"
-  scp -i "$SSH_KEY" -r server/dist "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
-  scp -i "$SSH_KEY" server/package.json "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
-  scp -i "$SSH_KEY" server/.env "$SSH_USER@$SSH_HOST:$SERVER_DIR/" 2>/dev/null || echo "(no .env file, skipping)"
+  # Upload to /opt/kosm-server as root
+  scp -r server/dist server/package.json server/.env "root@$ROOT_HOST:$SERVER_DIR/"
 
-  # Install deps and trigger restart via tmp/restart.txt
-  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" 'bash -s' << 'REMOTE_SCRIPT'
-    # Load Node.js via nvm (shared hosting)
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-    cd ~/aiator/server
+  # Install deps and restart
+  ssh "root@$ROOT_HOST" "bash -s" << 'REMOTE_SCRIPT'
+    cd /opt/kosm-server
     rm -rf node_modules
     npm install --production
 
-    # Signal server to restart (file watcher in index.ts)
-    mkdir -p tmp
-    touch tmp/restart.txt
-    echo "Restart signal sent. Waiting for new server..."
-    sleep 4
-    curl -s https://ws.aiator.ru/api/health && echo "  → Server restarted OK!" || echo "  → Restart pending (check BeGet panel)"
+    # Kill old process
+    PID=$(fuser 3001/tcp 2>/dev/null)
+    [ -n "$PID" ] && kill -9 $PID 2>/dev/null
+    sleep 1
+
+    # Start new process
+    nohup node --env-file=.env dist/index.js > server.log 2>&1 &
+    sleep 2
+    curl -s http://localhost:3001/api/health && echo "  → Server restarted OK!" || echo "  → Check server.log"
 REMOTE_SCRIPT
 
   echo "Server deployed!"
@@ -60,4 +57,4 @@ fi
 
 echo "=== Deploy complete ==="
 echo "Frontend: https://aiator.ru/"
-echo "Server API: https://aiator.ru/api/health"
+echo "Server API: https://ws.aiator.ru/api/health"
