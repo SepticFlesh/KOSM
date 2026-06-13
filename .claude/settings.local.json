@@ -36,7 +36,8 @@
       "Bash(echo \"DEPLOY_TOKEN=kosm-deploy-$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(6\\).toString\\('hex'\\)\\)\"\\)\")",
       "Bash(git stash *)",
       "Bash(sed -i '' 's/this\\\\.spawnEnemies\\(4\\)/this.spawnEnemies\\(\\)/g' src/engine/SceneManager.ts src/modes/SinglePlayerMode.ts)",
-      "Bash(sed -i '' 's/sceneManager\\\\.spawnEnemies\\(4\\)/sceneManager.spawnEnemies\\(\\)/g' src/game/bootstrap.ts)"
+      "Bash(sed -i '' 's/sceneManager\\\\.spawnEnemies\\(4\\)/sceneManager.spawnEnemies\\(\\)/g' src/game/bootstrap.ts)",
+      "Bash(grep -c \"TrafficSystem\" dist/systems/*.js)"
     ]
   }
 }
