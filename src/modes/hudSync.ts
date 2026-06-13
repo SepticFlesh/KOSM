@@ -160,8 +160,8 @@ export function createHUDSync(opts: HUDSyncOptions): () => void {
     }
     (window as any).__kosmRadarBlips = blips;
 
-    // ── Navigator blips (only nearby objects, mirrored left-right) ──
-    const navRange = 50000; // planets start at 80K — excluded to avoid phantom blips
+    // ── Navigator blips (wide range, mirrored left-right) ──
+    const navRange = 200000;
     const navBlips: any[] = [];
 
     // Star system objects — X negated for left-right mirror
