@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type ShipVisualType = 'default' | 'trader' | 'pirate';
+export type ShipVisualType = 'default' | 'pirate';
 
 /**
  * Renders another player's or NPC's ship in the world.
@@ -29,7 +29,7 @@ export class RemotePlayer {
   private createMesh(vtype: ShipVisualType): THREE.Group {
     const g = new THREE.Group();
 
-    if (vtype === 'trader') {
+    if (false) {
       // Large tanker shape
       const bodyMat = new THREE.MeshStandardMaterial({ color: 0xcc8800, roughness: 0.5, metalness: 0.5 });
       const stripeMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4, metalness: 0.4 });

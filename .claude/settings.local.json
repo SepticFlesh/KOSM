@@ -33,7 +33,8 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(ls dist/http/router.js)",
       "Bash(node *)",
-      "Bash(echo \"DEPLOY_TOKEN=kosm-deploy-$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(6\\).toString\\('hex'\\)\\)\"\\)\")"
+      "Bash(echo \"DEPLOY_TOKEN=kosm-deploy-$\\(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(6\\).toString\\('hex'\\)\\)\"\\)\")",
+      "Bash(git stash *)"
     ]
   }
 }
