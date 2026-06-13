@@ -37,6 +37,7 @@ export class WeaponSystem {
   private scene: THREE.Scene;
   public bolts: LaserBolt[] = [];
   private cooldown = 0;
+  public get cooldownRemaining(): number { return this.cooldown; }
   private fireRate = 0.15;
   private gunToggle = false;
   private gunPositions = [
