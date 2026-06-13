@@ -53,12 +53,11 @@ if [ "${1:-}" = "--server" ]; then
     DEPLOY_TOKEN=$(grep DEPLOY_TOKEN .env 2>/dev/null | cut -d= -f2)
     if [ -n "$DEPLOY_TOKEN" ]; then
       echo "Triggering graceful restart via API..."
-      curl -s -X POST -H "x-deploy-token: $DEPLOY_TOKEN" http://localhost:3001/api/restart || true
+      curl -s -X POST -H "x-deploy-token: $DEPLOY_TOKEN" https://ws.aiator.ru/api/restart || true
       echo ""
       echo "Waiting for server to restart..."
-      sleep 4
-      # Verify new server is up
-      curl -s http://localhost:3001/api/health && echo "  → Server restarted OK!" || echo "  → Waiting for hosting to restart..."
+      sleep 5
+      curl -s https://ws.aiator.ru/api/health && echo "  → Server restarted OK!" || echo "  → Restart pending..."
     else
       echo "WARNING: No DEPLOY_TOKEN found, cannot trigger restart"
       echo "Please restart manually via BeGet panel"

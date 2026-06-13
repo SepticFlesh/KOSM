@@ -57,7 +57,8 @@ export type ClientMessage =
   | MissionAcceptMessage
   | JumpRequestMessage
   | ChatMessage
-  | { type: 'fire_bolt'; payload: { pos: Vec3; dir: Vec3 } };
+  | { type: 'fire_bolt'; payload: { pos: Vec3; dir: Vec3 } }
+  | { type: 'ping'; payload?: Record<string, never> };
 
 // --- Server → Client ---
 
@@ -150,6 +151,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('mission_accept'), payload: z.object({ missionId: z.number().int().positive() }) }),
   z.object({ type: z.literal('jump_request'),  payload: z.object({ targetSystem: z.number().int().min(0) }) }),
   z.object({ type: z.literal('chat_message'),  payload: z.object({ text: z.string().min(1).max(500) }) }),
+  z.object({ type: z.literal('ping'), payload: z.object({}).optional() }),
 ]);
 
 export type ClientMessageValidated = z.infer<typeof ClientMessageSchema>;

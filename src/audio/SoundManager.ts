@@ -106,7 +106,7 @@ export class SoundManager {
     this.engineNoiseGain = null;
   }
 
-  /** Laser whistle — high sweep, stretched */
+  /** Laser whistle — high sweep, self-cleaning */
   playLaser() {
     this.init();
     const ctx = this.ctx!;
@@ -116,10 +116,8 @@ export class SoundManager {
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc2.type = 'sine';
-    // High whistle sweep
     osc.frequency.setValueAtTime(800, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + dur);
-    // Harmonic for richness
     osc2.frequency.setValueAtTime(1200, ctx.currentTime);
     osc2.frequency.exponentialRampToValueAtTime(250, ctx.currentTime + dur);
     gain.gain.setValueAtTime(0.06, ctx.currentTime);
@@ -132,6 +130,11 @@ export class SoundManager {
     osc2.start(ctx.currentTime);
     osc.stop(ctx.currentTime + dur);
     osc2.stop(ctx.currentTime + dur);
+    // Disconnect after done to prevent graph bloat
+    const cleanup = () => {
+      osc.disconnect(); osc2.disconnect(); gain.disconnect();
+    };
+    setTimeout(cleanup, dur * 1000 + 100);
   }
 
   /** Explosion boom */
