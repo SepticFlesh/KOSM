@@ -185,9 +185,33 @@ httpServer.listen(PORT, () => {
   console.log(`[KOSM Server] WS: ws://localhost:${PORT}/ws`);
 });
 
+// ── Auto-restart watcher (tmp/restart.txt triggers graceful restart) ─
+import { watchFile, unwatchFile, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const restartDir = join(__dirname, '..', 'tmp');
+const restartFile = join(restartDir, 'restart.txt');
+
+// Ensure tmp/ exists and restart file is fresh
+if (!existsSync(restartDir)) mkdirSync(restartDir, { recursive: true });
+writeFileSync(restartFile, ''); // ensure file exists for watcher
+
+// Poll every 2s — when deploy script touches this file, server exits
+// and hosting auto-restarts with the new code.
+watchFile(restartFile, { interval: 2000 }, (curr, prev) => {
+  if (curr.mtimeMs !== prev.mtimeMs && curr.mtimeMs > 0 && prev.mtimeMs > 0) {
+    console.log('[KOSM] Restart signal received via tmp/restart.txt');
+    unwatchFile(restartFile);
+    shutdown();
+  }
+});
+
 // ── Graceful shutdown ───────────────────────────────────────────────
 function shutdown() {
   console.log('[KOSM] Shutting down...');
+  unwatchFile(restartFile);
   gameLoop.stop();
   httpServer.close();
   process.exit(0);

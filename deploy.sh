@@ -39,8 +39,8 @@ if [ "${1:-}" = "--server" ]; then
   scp -i "$SSH_KEY" server/package.json "$SSH_USER@$SSH_HOST:$SERVER_DIR/"
   scp -i "$SSH_KEY" server/.env "$SSH_USER@$SSH_HOST:$SERVER_DIR/" 2>/dev/null || echo "(no .env file, skipping)"
 
-  # Install deps and restart on server
-  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" << 'REMOTE_SCRIPT'
+  # Install deps and trigger restart via tmp/restart.txt
+  ssh -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" 'bash -s' << 'REMOTE_SCRIPT'
     # Load Node.js via nvm (shared hosting)
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -49,19 +49,12 @@ if [ "${1:-}" = "--server" ]; then
     rm -rf node_modules
     npm install --production
 
-    # Get deploy token from .env
-    DEPLOY_TOKEN=$(grep DEPLOY_TOKEN .env 2>/dev/null | cut -d= -f2)
-    if [ -n "$DEPLOY_TOKEN" ]; then
-      echo "Triggering graceful restart via API..."
-      curl -s -X POST -H "x-deploy-token: $DEPLOY_TOKEN" https://ws.aiator.ru/api/restart || true
-      echo ""
-      echo "Waiting for server to restart..."
-      sleep 5
-      curl -s https://ws.aiator.ru/api/health && echo "  → Server restarted OK!" || echo "  → Restart pending..."
-    else
-      echo "WARNING: No DEPLOY_TOKEN found, cannot trigger restart"
-      echo "Please restart manually via BeGet panel"
-    fi
+    # Signal server to restart (file watcher in index.ts)
+    mkdir -p tmp
+    touch tmp/restart.txt
+    echo "Restart signal sent. Waiting for new server..."
+    sleep 4
+    curl -s https://ws.aiator.ru/api/health && echo "  → Server restarted OK!" || echo "  → Restart pending (check BeGet panel)"
 REMOTE_SCRIPT
 
   echo "Server deployed!"
