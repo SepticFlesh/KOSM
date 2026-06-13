@@ -1,6 +1,5 @@
 import { Vector3, Quaternion } from 'three';
 import { ShipEntity, DEFAULT_CONFIG } from './entities/ShipEntity.js';
-import { TrafficSystem } from './systems/TrafficSystem.js';
 import type { PlayerSession } from './wsServer.js';
 import type { WorldSnapshot, EntitySnapshot, InputPayload, ServerMessage } from './protocol/messages.js';
 
@@ -27,7 +26,6 @@ interface NPCEntry {
 export class GameLoop {
   private players = new Map<string, PlayerEntry>();
   private npcs = new Map<string, NPCEntry>();
-  public traffic = new TrafficSystem();
   private tick = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private broadcastFn: ((msg: ServerMessage) => void) | null = null;
@@ -174,14 +172,12 @@ export class GameLoop {
 
   start(): void {
     this.initNPCs();
-    this.traffic.init(0);
     this.timer = setInterval(() => this.tickLoop(), TICK_DT * 1000);
-    console.log(`[GameLoop] Started at ${TICK_RATE}Hz, ${this.traffic.ships.length} civilian ships`);
+    console.log(`[GameLoop] Started at ${TICK_RATE}Hz`);
   }
 
   stop(): void {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
-    this.traffic.dispose();
   }
 
   private tickLoop(): void {
@@ -215,10 +211,7 @@ export class GameLoop {
       entry.ship.simulate(TICK_DT);
     }
 
-    // 3. Traffic (civilian ships) — pass player positions for LOD
-    const pirates = [...this.npcs.entries()].map(([id, npc]) => ({ id, ship: npc.ship, aiState: npc.aiState }));
-    const playerPositions = [...this.players.values()].map(e => e.ship.state.position);
-    this.traffic.update(TICK_DT, pirates, playerPositions);
+    // 3. Traffic removed — no civilian ships
 
     // 4. NPC AI (simplified)
     for (const [, npc] of this.npcs) {
@@ -322,22 +315,6 @@ export class GameLoop {
     if (this.tick % 2 === 0 && this.broadcastFn) {
       const entities: EntitySnapshot[] = [];
 
-      // Collect player positions for distance culling
-      const playerPositions: Vector3[] = [];
-      for (const [, entry] of this.players) {
-        playerPositions.push(entry.ship.state.position);
-      }
-      const hasPlayers = playerPositions.length > 0;
-
-      // Helper: check if position is near any player
-      const TRAFFIC_CULL_RANGE = 50000;
-      const isNearPlayer = (pos: Vector3): boolean => {
-        for (const pp of playerPositions) {
-          if (pos.distanceToSquared(pp) < TRAFFIC_CULL_RANGE * TRAFFIC_CULL_RANGE) return true;
-        }
-        return false;
-      };
-
       // Players (always included)
       for (const [id, entry] of this.players) {
         const s = entry.ship.state;
@@ -349,33 +326,6 @@ export class GameLoop {
           health: s.health,
           shield: s.shield,
           ownerId: id,
-        });
-      }
-
-      // Planet bases (always included — small count)
-      for (const b of this.traffic.getBases()) {
-        entities.push({
-          id: b.id,
-          position: { x: b.pos.x, y: b.pos.y, z: b.pos.z },
-          orientation: { x: 0, y: 0, z: 0, w: 1 },
-          velocity: { x: 0, y: 0, z: 0 },
-          health: 1, shield: 1,
-          npcType: 'base',
-        });
-      }
-
-      // Civilian traffic — only near players
-      for (const cs of this.traffic.ships) {
-        if (hasPlayers && !isNearPlayer(cs.ship.state.position)) continue;
-        const s = cs.ship.state;
-        entities.push({
-          id: cs.id,
-          position: { x: s.position.x, y: s.position.y, z: s.position.z },
-          orientation: { x: s.orientation.x, y: s.orientation.y, z: s.orientation.z, w: s.orientation.w },
-          velocity: { x: s.velocity.x, y: s.velocity.y, z: s.velocity.z },
-          health: s.health,
-          shield: 0,
-          npcType: cs.shipType.role,
         });
       }
 
@@ -400,7 +350,6 @@ export class GameLoop {
         systemSeed: 0,
         entities,
         station: { id: 'station_0', position: { x: 600, y: 50, z: -400 } },
-        routes: this.traffic.getRoutesData(),
       };
 
       this.broadcastFn({ type: 'world_snapshot', payload: snapshot });

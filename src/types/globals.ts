@@ -43,12 +43,6 @@ declare global {
       npcType: string;
     }>;
 
-    // Route data (from server)
-    __kosmRoutes?: Array<{
-      id: string; type: string;
-      waypoints: Array<{ x: number; y: number; z: number }>;
-    }>;
-
     // Damage flash timers
     __kosmLastDmg?: number;
     __kosmLastHit?: number;
