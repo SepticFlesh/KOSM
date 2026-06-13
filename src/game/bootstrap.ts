@@ -77,7 +77,7 @@ export async function initSharedGame(
 
   // Spawn enemies (SP mode only; MP gets enemies from server)
   if (mode === 'single-player') {
-    sceneManager.spawnEnemies(4);
+    sceneManager.spawnEnemies();
   }
 
   // Seed global HUD state

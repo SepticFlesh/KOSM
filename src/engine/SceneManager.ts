@@ -116,26 +116,39 @@ export class SceneManager {
     return this.station;
   }
 
-  /** Spawn enemies in the system */
-  spawnEnemies(count: number = 3): void {
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const dist = 50000 + Math.random() * 150000;
-      const pos = new THREE.Vector3(
-        Math.cos(angle) * dist,
-        (Math.random() - 0.5) * 200,
-        Math.sin(angle) * dist
-      );
-      const enemy = new EnemyShip(this.scene, pos);
-      // Share particle texture from player weapon system
-      if (this.playerShip) {
-        enemy.setParticleTexture(
-          (this.playerShip.weaponSystem as any).particleTex
-        );
-      }
-      this.enemies.push(enemy);
+  /** Spawn 5 pirates near each planet (matching server logic) */
+  spawnEnemies(_count?: number): void {
+    // Generate planet orbits matching StarSystem (mulberry32 PRNG)
+    let s = 0;
+    const next = (): number => {
+      s |= 0; s = s + 0x6D2B79F5 | 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) | 0;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    const planetCount = 5 + Math.floor(next() * 6);
+    const orbits: number[] = [];
+    for (let i = 0; i < planetCount; i++) {
+      const t = i / (planetCount - 1);
+      orbits.push(80000 + Math.pow(t, 1.5) * 500000);
     }
-    console.log(`[SceneManager] Spawned ${count} enemies`);
+    for (const orbitR of orbits) {
+      for (let p = 0; p < 5; p++) {
+        const a = (p / 5) * Math.PI * 2 + Math.random() * 0.5;
+        const r = orbitR + (Math.random() - 0.5) * 10000;
+        const pos = new THREE.Vector3(
+          Math.cos(a) * r,
+          (Math.random() - 0.5) * 5000,
+          Math.sin(a) * r,
+        );
+        const enemy = new EnemyShip(this.scene, pos);
+        if (this.playerShip) {
+          enemy.setParticleTexture((this.playerShip.weaponSystem as any).particleTex);
+        }
+        this.enemies.push(enemy);
+      }
+    }
+    console.log(`[SceneManager] Spawned ${this.enemies.length} enemies across ${orbits.length} planets`);
   }
 
   /** Main update */
@@ -350,7 +363,7 @@ export class SceneManager {
     // Create new system
     this.createStarSystem(seed);
     this.createStation(new THREE.Vector3(200, 50, -100));
-    this.spawnEnemies(4);
+    this.spawnEnemies();
     this.spawnAsteroids(15);
 
     // Reset player position

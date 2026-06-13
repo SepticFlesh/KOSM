@@ -21,6 +21,7 @@ interface NPCEntry {
   aiState: 'patrol' | 'chase' | 'attack';
   aiTimer: number;
   patrolTarget: Vector3;
+  orbitRadius: number; // planet orbit this pirate guards
 }
 
 export class GameLoop {
@@ -96,15 +97,18 @@ export class GameLoop {
         // Hide after 500ms (client sees death + explosion)
         const deadPos = bestNpc.ship.state.position.clone();
         setTimeout(() => { bestNpc!.ship.state.position.set(0, -99999, 0); }, 500);
-        // Respawn after 5 seconds
+        // Respawn near same planet orbit after 5 seconds
+        const orbitR = bestNpc.orbitRadius;
         setTimeout(() => {
+          const a = Math.random() * Math.PI * 2;
+          const r = orbitR + (Math.random() - 0.5) * 10000;
           bestNpc!.ship.reset(new Vector3(
-            600 + (Math.random() - 0.5) * 500,
-            250 + (Math.random() - 0.5) * 200,
-            -800 + (Math.random() - 0.5) * 500,
+            Math.cos(a) * r,
+            (Math.random() - 0.5) * 5000,
+            Math.sin(a) * r,
           ));
           (bestNpc as any)._dead = false;
-        }, 3000);
+        }, 5000);
         if (this.onKillFn) this.onKillFn(session.playerId, 1);
       }
     }
@@ -138,36 +142,62 @@ export class GameLoop {
     }
   }
 
-  initNPCs(): void {
-    // Spawn 3-5 pirates
-    for (let i = 0; i < 4; i++) {
-      const id = `npc_${i}`;
-      const ship = new ShipEntity({
-        thrust: 250,
-        rotationalSpeed: 5.0,
-        maxSpeedAssist: 250,
-      });
-      const angle = (i / 4) * Math.PI * 2;
-      const dist = 200 + Math.random() * 300;
-      ship.reset(new Vector3(
-        600 + Math.cos(angle) * dist,
-        250 + (Math.random() - 0.5) * 100,
-        -800 + Math.sin(angle) * dist
-      ));
-      this.npcs.set(id, {
-        id,
-        ship,
-        systemSeed: 0,
-        aiState: 'patrol',
-        aiTimer: 4 + Math.random() * 6,
-        patrolTarget: new Vector3(
-          600 + (Math.random() - 0.5) * 2000,
-          250 + (Math.random() - 0.5) * 800,
-          -800 + (Math.random() - 0.5) * 2000,
-        ),
-      });
+  /** Simple seeded RNG matching client StarSystem planet generation */
+  private generatePlanetOrbits(systemSeed: number): number[] {
+    // Mulberry32 PRNG (same as client)
+    let s = systemSeed;
+    const next = (): number => {
+      s |= 0; s = s + 0x6D2B79F5 | 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) | 0;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    const count = 5 + Math.floor(next() * 6); // 5-10 planets
+    const orbits: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1);
+      orbits.push(80000 + Math.pow(t, 1.5) * 500000);
     }
-    console.log(`[GameLoop] Spawned ${this.npcs.size} NPCs`);
+    return orbits;
+  }
+
+  initNPCs(): void {
+    let npcIdx = 0;
+    // Generate planet orbits matching client StarSystem
+    const orbits = this.generatePlanetOrbits(0);
+    for (const orbitRadius of orbits) {
+      // Spawn 5 pirates per planet
+      for (let p = 0; p < 5; p++) {
+        const id = `npc_${npcIdx++}`;
+        const ship = new ShipEntity({
+          thrust: 250,
+          rotationalSpeed: 5.0,
+          maxSpeedAssist: 250,
+        });
+        // Place pirate near the planet's orbit
+        const orbitAngle = (p / 5) * Math.PI * 2 + Math.random() * 0.5;
+        const radialOffset = (Math.random() - 0.5) * 10000;
+        const r = orbitRadius + radialOffset;
+        const x = Math.cos(orbitAngle) * r;
+        const z = Math.sin(orbitAngle) * r;
+        const y = (Math.random() - 0.5) * 5000;
+        ship.reset(new Vector3(x, y, z));
+        this.npcs.set(id, {
+          id,
+          ship,
+          systemSeed: 0,
+          aiState: 'patrol',
+          aiTimer: 4 + Math.random() * 6,
+          orbitRadius,
+          patrolTarget: new Vector3(
+            x + (Math.random() - 0.5) * 20000,
+            y + (Math.random() - 0.5) * 10000,
+            z + (Math.random() - 0.5) * 20000,
+          ),
+        });
+      }
+    }
+    console.log(`[GameLoop] Spawned ${this.npcs.size} pirates across ${orbits.length} planets`);
   }
 
   start(): void {

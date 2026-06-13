@@ -96,7 +96,7 @@ export function attachMultiplayer(
             const isNPC = !e.ownerId;
             const label = isNPC ? (e.npcType || 'NPC') : `Player_${e.id.slice(0, 4)}`;
             const nt = (e as any).npcType || '';
-            const vtype: ShipVisualType = (nt === 'trader' || nt === 'shuttle' || nt === 'transport' || nt === 'liner') ? 'trader' : nt === 'pirate' ? 'pirate' : 'default';
+            const vtype: ShipVisualType = nt === 'pirate' ? 'pirate' : 'default';
             rp = new RemotePlayer(scene, e.id, label, vtype);
             rp.isNPC = isNPC;
             remotePlayers.set(e.id, rp);

@@ -164,7 +164,7 @@ export function attachSinglePlayer(
     // Respawn enemies after 15s if all dead
     if (this.enemies.length === 0 && !(this as any)._respawnTimer) {
       (this as any)._respawnTimer = setTimeout(() => {
-        this.spawnEnemies(4);
+        this.spawnEnemies();
         (this as any)._respawnTimer = null;
       }, 15000);
     }
